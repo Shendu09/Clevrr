@@ -151,6 +151,58 @@ class SafetyGuard:
         self.log_decision(action_text, result["decision"], result["reason"])
         return result
 
+    def check_for_injection(self, text: str) -> Dict[str, str]:
+        """Detect command-injection style patterns in plain text."""
+        lower = (text or "").lower().strip()
+        suspicious_tokens = [
+            "&&",
+            "||",
+            ";",
+            "|",
+            "`",
+            "$(",
+            "%comspec%",
+            "powershell -enc",
+            "cmd /c",
+        ]
+
+        for token in suspicious_tokens:
+            if token in lower:
+                return {
+                    "is_injection": True,
+                    "reason": f"Potential command injection token detected: '{token}'",
+                }
+
+        return {
+            "is_injection": False,
+            "reason": "No injection patterns detected",
+        }
+
+    def check_voice_command(
+        self,
+        command: str,
+        auth_result: dict,
+    ) -> dict:
+        """Apply voice auth and injection gates before normal safety checks."""
+        if not auth_result.get("verified", True):
+            return {
+                "decision": "BLOCKED",
+                "reason": (
+                    f"Voice not recognized: {auth_result.get('reason')}"
+                ),
+                "severity": "HIGH",
+            }
+
+        injection = self.check_for_injection(command)
+        if injection["is_injection"]:
+            return {
+                "decision": "BLOCKED",
+                "reason": injection["reason"],
+                "severity": "CRITICAL",
+            }
+
+        return self.check_action(command)
+
     # ------------------------------------------------------------------
     # User Confirmation
     # ------------------------------------------------------------------

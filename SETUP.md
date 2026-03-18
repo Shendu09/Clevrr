@@ -141,6 +141,9 @@ python main.py
 # With voice control
 python main.py --voice
 
+# High-speed AI layer with voice routing
+python main.py --mode layer --voice
+
 # Run a single task
 python main.py --task "Open Notepad and type Hello World"
 
@@ -183,9 +186,12 @@ ollama:
   timeout: 60                     # Request timeout (seconds)
 
 voice:
-  enabled: false                  # Enable voice control
-  wake_word: "hey computer"       # Wake word phrase
-  whisper_model: "base"           # Whisper model size
+  enabled: true                   # Enable voice control
+  wake_word: "hey clevrr"         # Wake word phrase
+  whisper_model: "tiny"           # Whisper model size (fastest)
+  tts_rate: 200                   # Faster TTS response
+  require_voice_auth: false       # Optional speaker verification gate
+  auth_threshold: 0.82            # Voice auth threshold
 
 screen:
   capture_interval: 1.0           # Seconds between captures
@@ -198,6 +204,16 @@ screen:
 Edit `config/safety_rules.yaml` to customize:
 - **always_block**: Actions that are NEVER executed
 - **always_confirm**: Actions that require user confirmation
+
+### Voice Commands (Layer Mode)
+
+In `--mode layer`, these commands are routed directly for speed:
+
+- Open/launch apps: `open chrome`, `launch notepad`, `start calculator`
+- Close apps/windows: `close chrome`, `quit notepad`
+- System actions: `take screenshot`, `show desktop`, `lock computer`
+- Utility actions: `organize downloads`, `system health`, `what is open`
+- Window layout: `side by side`
 
 ---
 

@@ -12,6 +12,7 @@ Tech: Ollama (llava + llama3) · pyautogui · Whisper · pyttsx3 · SQLite
 Usage:
     python main.py              # Launch with Gradio dashboard
     python main.py --voice      # Enable voice control
+    python main.py --mode layer --voice   # Run AILayer voice mode
     python main.py --task "Open Notepad"   # Run a single task
     python main.py --setup      # First-time setup wizard
 """
@@ -268,9 +269,17 @@ def main() -> None:
             "Examples:\n"
             "  python main.py                        Launch with dashboard\n"
             "  python main.py --voice                 Enable voice mode\n"
+            "  python main.py --mode layer --voice    Enable AILayer voice mode\n"
             "  python main.py --task 'Open Notepad'   Run a single task\n"
             "  python main.py --setup                  First-time setup\n"
         ),
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=["orchestrator", "layer"],
+        default="orchestrator",
+        help="Runtime mode: orchestrator (default) or layer",
     )
 
     parser.add_argument(
@@ -358,38 +367,59 @@ def main() -> None:
         stats["total_procedures"],
     )
 
-    # ── Initialize Orchestrator ──
-    logger.info("Initializing orchestrator...")
-    from agents.orchestrator import Orchestrator
-
-    orchestrator = Orchestrator(config)
-
-    # ── Initialize Voice Controller ──
+    orchestrator = None
+    ai_layer = None
     voice_controller = None
-    if config.get("voice", {}).get("enabled", False):
-        logger.info("Initializing voice controller...")
-        from utils.voice_controller import VoiceController
 
-        voice_controller = VoiceController(config)
-        voice_controller.start_background_listening(
-            callback=lambda cmd: orchestrator.run_task(cmd)
-        )
-        logger.info("Voice control active. Wake word: '%s'",
-                     config["voice"].get("wake_word", "hey computer"))
+    if args.mode == "layer":
+        logger.info("Initializing AI Layer...")
+        from core.ai_layer import AILayer
+
+        ai_layer = AILayer(config)
+        if config.get("voice", {}).get("enabled", False):
+            ai_layer.start_voice()
+            logger.info(
+                "AI Layer voice control active. Wake word: '%s'",
+                config["voice"].get("wake_word", "hey clevrr"),
+            )
+    else:
+        logger.info("Initializing orchestrator...")
+        from agents.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator(config)
+
+        if config.get("voice", {}).get("enabled", False):
+            logger.info("Initializing voice controller...")
+            from utils.voice_controller import VoiceController
+
+            voice_controller = VoiceController(config)
+            voice_controller.start_background_listening(
+                callback=lambda cmd: orchestrator.run_task(cmd)
+            )
+            logger.info(
+                "Voice control active. Wake word: '%s'",
+                config["voice"].get("wake_word", "hey computer"),
+            )
 
     # ── Single task mode ──
     if args.task:
         logger.info("Running single task: %s", args.task)
-        result = orchestrator.run_task(args.task)
+        result = (
+            ai_layer.run_task(args.task)
+            if ai_layer
+            else orchestrator.run_task(args.task)
+        )
 
         print("\n" + "=" * 60)
         status = "✅ SUCCESS" if result["success"] else "❌ FAILED"
         print(f"  {status}")
-        print(f"  Task: {result['task']}")
-        print(
-            f"  Steps: {result['steps_completed']}/{result['total_steps']}"
-        )
-        print(f"  Duration: {result['duration_seconds']:.1f}s")
+        print(f"  Task: {result.get('task', args.task)}")
+        if "steps_completed" in result and "total_steps" in result:
+            print(
+                f"  Steps: {result['steps_completed']}/{result['total_steps']}"
+            )
+        if "duration_seconds" in result:
+            print(f"  Duration: {result['duration_seconds']:.1f}s")
         print(f"  Outcome: {result.get('outcome', 'N/A')}")
         print("=" * 60 + "\n")
 
@@ -403,15 +433,15 @@ def main() -> None:
         logger.info("Launching Gradio dashboard...")
         from ui.dashboard import launch_dashboard
 
-        launch_dashboard(orchestrator, voice_controller, config)
+        launch_dashboard(orchestrator or ai_layer.orchestrator, voice_controller, config)
 
     elif args.ui == "floating":
         logger.info("Launching floating UI...")
         from ui.floating_ui import FloatingUI
 
         floating = FloatingUI(
-            on_task=lambda task: orchestrator.run_task(task),
-            on_cancel=lambda: orchestrator.cancel_task(),
+            on_task=lambda task: (ai_layer.run_task(task) if ai_layer else orchestrator.run_task(task)),
+            on_cancel=lambda: (orchestrator.cancel_task() if orchestrator else "No orchestrator cancel in layer mode"),
         )
         floating.launch()
 
@@ -434,6 +464,8 @@ def main() -> None:
     # Cleanup
     if voice_controller:
         voice_controller.stop()
+    if ai_layer:
+        ai_layer.stop_voice()
 
 
 if __name__ == "__main__":

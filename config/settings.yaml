@@ -9,12 +9,15 @@ ollama:
   max_retries: 3
 
 voice:
-  enabled: false
-  wake_word: "hey computer"
-  whisper_model: "base"
+  enabled: true
+  wake_word: "hey clevrr"
+  whisper_model: "tiny"
   whisper_language: "en"
-  tts_rate: 175
+  tts_rate: 200
   tts_volume: 1.0
+  require_voice_auth: false
+  auto_enroll_on_first_use: false
+  auth_threshold: 0.82
 
 screen:
   capture_interval: 1.0

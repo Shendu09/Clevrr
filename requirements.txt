@@ -22,6 +22,7 @@ openai-whisper                     # Offline speech-to-text (runs locally)
 pyttsx3                            # Offline text-to-speech (runs locally)
 sounddevice                        # Microphone audio recording
 soundfile                          # Audio file handling
+scipy                              # Signal processing utilities
 
 # --- Local AI (Memory & Search) ---
 sentence-transformers              # Local semantic search embeddings
@@ -31,6 +32,7 @@ gradio                             # Local web dashboard (localhost:7860)
 pyyaml                             # YAML config file parsing
 Pillow                             # Image handling
 numpy                              # Array/numerical processing
+psutil                             # System health/process metrics
 python-dotenv                      # Environment variable management
 
 # --- HTTP (local only, for Ollama communication) ---
