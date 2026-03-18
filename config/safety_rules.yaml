@@ -1,0 +1,27 @@
+# Safety Rules for Advanced Clevrr Computer
+# These rules protect the system from dangerous operations.
+# Actions matching 'always_block' are NEVER executed.
+# Actions matching 'always_confirm' require explicit user approval.
+
+always_block:
+  - "rm -rf"
+  - "format c:"
+  - "del /f /s /q"
+  - "delete system32"
+  - "mkfs"
+  - "dd if="
+  - ":(){:|:&};:"
+
+always_confirm:
+  - "delete"
+  - "remove"
+  - "uninstall"
+  - "payment"
+  - "transfer"
+  - "password"
+  - "format"
+  - "wipe"
+  - "send email"
+  - "purchase"
+  - "download"
+  - "install"

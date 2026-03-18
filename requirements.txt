@@ -1,0 +1,37 @@
+# Advanced Clevrr Computer - 100% Local AI Agent
+# All dependencies run locally. No external APIs required.
+#
+# IMPORTANT: Ollama must be installed as a system tool, NOT via pip.
+# Install Ollama from https://ollama.ai
+# Then run:
+#   ollama serve
+#   ollama pull llava
+#   ollama pull llama3
+#
+# Ollama provides the local LLM runtime for vision (llava) and
+# text reasoning (llama3). It runs as a system service on localhost:11434.
+
+# --- Computer Control ---
+pyautogui                          # Mouse + keyboard automation
+pywinauto; sys_platform == "win32" # Semantic UI element finding (Windows only)
+mss                                # Multi-monitor screen capture
+opencv-python                      # Image processing and comparison
+
+# --- Local AI (Voice) ---
+openai-whisper                     # Offline speech-to-text (runs locally)
+pyttsx3                            # Offline text-to-speech (runs locally)
+sounddevice                        # Microphone audio recording
+soundfile                          # Audio file handling
+
+# --- Local AI (Memory & Search) ---
+sentence-transformers              # Local semantic search embeddings
+
+# --- UI & Config ---
+gradio                             # Local web dashboard (localhost:7860)
+pyyaml                             # YAML config file parsing
+Pillow                             # Image handling
+numpy                              # Array/numerical processing
+python-dotenv                      # Environment variable management
+
+# --- HTTP (local only, for Ollama communication) ---
+requests                           # HTTP client for local Ollama API

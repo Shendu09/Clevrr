@@ -1,0 +1,41 @@
+# Advanced Clevrr Computer - Configuration
+# All settings for 100% local AI agent
+
+ollama:
+  url: "http://localhost:11434"
+  vision_model: "llava"
+  text_model: "llama3"
+  timeout: 60
+  max_retries: 3
+
+voice:
+  enabled: false
+  wake_word: "hey computer"
+  whisper_model: "base"
+  whisper_language: "en"
+  tts_rate: 175
+  tts_volume: 1.0
+
+screen:
+  capture_interval: 1.0
+  grid_size: 10
+  multi_monitor: false
+  screenshot_dir: "data/screenshots"
+  max_screenshots: 50
+
+memory:
+  db_path: "data/memory.db"
+  max_episodes: 1000
+  similarity_threshold: 0.75
+  cleanup_days: 30
+
+agent:
+  max_retries: 3
+  step_timeout: 30
+  heal_attempts: 3
+  confidence_threshold: 0.7
+
+ui:
+  port: 7860
+  theme: "dark"
+  refresh_interval: 1
