@@ -6,3 +6,45 @@ __pycache__/
 
 data/logs/
 data/screenshots/
+
+# Runtime data - never commit these
+data/memory.db
+data/test_memory.db
+data/safety_log.txt
+data/screenshots/
+data/*.db
+data/*.txt
+data/*.log
+
+# Keep data directory but ignore contents
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+
+# Logs
+logs/
+*.log

@@ -29,8 +29,13 @@ class PlannerAgent:
     SYSTEM_PROMPT = (
         "You are a computer automation planner. "
         "You MUST respond with ONLY valid JSON. "
-        "No explanations. No markdown. No code blocks. "
-        "Just raw JSON and nothing else."
+        "You MUST only use these action_type values: "
+        "click, double_click, right_click, type, press_key, "
+        "open_app, scroll_up, scroll_down, close_window, "
+        "save, save_and_close, minimize, maximize, "
+        "find_and_click, wait, hotkey, select_all, "
+        "copy, paste, undo, new_file. "
+        "Never invent new action types not in this list."
     )
 
     def __init__(

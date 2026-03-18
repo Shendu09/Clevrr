@@ -73,6 +73,9 @@ class ExecutorAgent:
         target = str(step.get("target", "") or "")
         value = step.get("value")
         description = str(step.get("description", "") or "")
+        coords = self._parse_coordinates(target) or self._parse_coordinates(
+            description
+        )
 
         logger.info(
             "Executing step: [%s] %s (target=%s, value=%s)",
@@ -91,14 +94,35 @@ class ExecutorAgent:
 
         try:
             if action_type == "click":
-                success = self._handle_click(target, description)
-                result["action_performed"] = f"Clicked on '{target}'"
+                if coords:
+                    success = self.click(coords[0], coords[1])
+                else:
+                    success = self.find_and_click(target or description)
+                result["action_performed"] = f"Clicked on '{target or description}'"
 
-            elif action_type == "type":
+            elif action_type == "right_click":
+                if coords:
+                    success = self.right_click(coords[0], coords[1])
+                else:
+                    success = self.find_and_click(target or description)
+                result["action_performed"] = (
+                    f"Right-clicked on '{target or description}'"
+                )
+
+            elif action_type == "double_click":
+                if coords:
+                    success = self.double_click(coords[0], coords[1])
+                else:
+                    success = self.find_and_click(target or description)
+                result["action_performed"] = (
+                    f"Double-clicked on '{target or description}'"
+                )
+
+            elif action_type in ("type", "type_text"):
                 success = self.type_text(value or target)
                 result["action_performed"] = f"Typed: '{(value or target)[:50]}'"
 
-            elif action_type == "press":
+            elif action_type in ("press", "press_key"):
                 success = self.press_key(value or target)
                 result["action_performed"] = f"Pressed key: '{value or target}'"
 
@@ -118,23 +142,111 @@ class ExecutorAgent:
                 )
                 result["action_performed"] = f"Scrolled {direction}"
 
+            elif action_type == "scroll_up":
+                x, y = coords if coords else (
+                    self.screen_width // 2,
+                    self.screen_height // 2,
+                )
+                success = self.scroll(x, y, "up", 3)
+                result["action_performed"] = "Scrolled up"
+
+            elif action_type == "scroll_down":
+                x, y = coords if coords else (
+                    self.screen_width // 2,
+                    self.screen_height // 2,
+                )
+                success = self.scroll(x, y, "down", 3)
+                result["action_performed"] = "Scrolled down"
+
+            elif action_type in ("close", "close_window"):
+                success = self.press_key("alt+f4")
+                result["action_performed"] = "Closed window"
+
+            elif action_type == "save":
+                success = self.press_key("ctrl+s")
+                result["action_performed"] = "Saved"
+
+            elif action_type == "save_and_close":
+                save_success = self.press_key("ctrl+s")
+                time.sleep(1)
+                close_success = self.press_key("alt+f4")
+                success = save_success and close_success
+                result["action_performed"] = "Saved and closed"
+
+            elif action_type == "minimize":
+                success = self.press_key("win+down")
+                result["action_performed"] = "Minimized window"
+
+            elif action_type == "maximize":
+                success = self.press_key("win+up")
+                result["action_performed"] = "Maximized window"
+
+            elif action_type == "screenshot":
+                success = bool(self.take_screenshot())
+                result["action_performed"] = "Captured screenshot"
+
+            elif action_type == "hotkey":
+                if isinstance(value, str) and value.strip():
+                    keys = [k.strip() for k in value.split("+") if k.strip()]
+                    pyautogui.hotkey(*keys)
+                    success = True
+                    result["action_performed"] = f"Pressed hotkey: {value}"
+                else:
+                    success = False
+                    result["action_performed"] = "Invalid hotkey value"
+
+            elif action_type == "find_and_click":
+                success = self.find_and_click(target or description)
+                result["action_performed"] = (
+                    f"Vision-click on '{target or description}'"
+                )
+
+            elif action_type == "drag":
+                drag_coords = self._parse_drag_coordinates(target, value)
+                if drag_coords:
+                    success = self.drag(*drag_coords)
+                    result["action_performed"] = (
+                        f"Dragged from ({drag_coords[0]}, {drag_coords[1]}) "
+                        f"to ({drag_coords[2]}, {drag_coords[3]})"
+                    )
+                else:
+                    success = False
+                    result["action_performed"] = "Invalid drag coordinates"
+
+            elif action_type == "select_all":
+                success = self.press_key("ctrl+a")
+                result["action_performed"] = "Selected all"
+
+            elif action_type == "copy":
+                success = self.press_key("ctrl+c")
+                result["action_performed"] = "Copied"
+
+            elif action_type == "paste":
+                success = self.press_key("ctrl+v")
+                result["action_performed"] = "Pasted"
+
+            elif action_type == "undo":
+                success = self.press_key("ctrl+z")
+                result["action_performed"] = "Undo"
+
+            elif action_type == "new_file":
+                success = self.press_key("ctrl+n")
+                result["action_performed"] = "Created new file"
+
             elif action_type == "wait":
-                wait_time = 2
-                if value:
-                    try:
-                        wait_time = int(value)
-                    except (ValueError, TypeError):
-                        wait_time = 2
+                wait_time = int(step.get("value", 2))
                 time.sleep(wait_time)
                 success = True
                 result["action_performed"] = f"Waited {wait_time}s"
 
             else:
-                # Try to interpret as a click with vision
-                fallback_target = description or target or action_type
-                success = self.find_and_click(fallback_target)
+                logger.warning(
+                    "Unknown action_type: %s, attempting find_and_click",
+                    action_type,
+                )
+                success = self.find_and_click(description)
                 result["action_performed"] = (
-                    f"Vision-click on '{fallback_target}'"
+                    f"Vision-click on '{description}'"
                 )
 
             result["success"] = success
@@ -315,6 +427,25 @@ class ExecutorAgent:
             logger.error("Scroll failed: %s", exc)
             return False
 
+    def drag(self, x1: int, y1: int, x2: int, y2: int) -> bool:
+        """Drag mouse from start coordinates to end coordinates."""
+        try:
+            x1 = max(0, min(x1, self.screen_width - 1))
+            y1 = max(0, min(y1, self.screen_height - 1))
+            x2 = max(0, min(x2, self.screen_width - 1))
+            y2 = max(0, min(y2, self.screen_height - 1))
+            pyautogui.moveTo(x1, y1, duration=0.2)
+            pyautogui.dragTo(x2, y2, duration=0.4, button="left")
+            logger.info("Dragged from (%d, %d) to (%d, %d)", x1, y1, x2, y2)
+            return True
+        except Exception as exc:
+            logger.error("Drag failed: %s", exc)
+            return False
+
+    def take_screenshot(self) -> str:
+        """Capture and return screenshot path."""
+        return self.screen.capture_primary()
+
     # ------------------------------------------------------------------
     # Application Control
     # ------------------------------------------------------------------
@@ -409,6 +540,42 @@ class ExecutorAgent:
 
         # Fall back to vision-based finding
         return self.find_and_click(target or description)
+
+    @staticmethod
+    def _parse_drag_coordinates(target: str, value: object) -> Optional[Tuple[int, int, int, int]]:
+        """Extract drag coordinates from value dict/list/tuple/string or target string."""
+        if isinstance(value, dict):
+            x1 = value.get("x1")
+            y1 = value.get("y1")
+            x2 = value.get("x2")
+            y2 = value.get("y2")
+            if all(isinstance(v, (int, float)) for v in (x1, y1, x2, y2)):
+                return int(x1), int(y1), int(x2), int(y2)
+
+        if isinstance(value, (list, tuple)) and len(value) == 4:
+            if all(isinstance(v, (int, float)) for v in value):
+                return int(value[0]), int(value[1]), int(value[2]), int(value[3])
+
+        text = value if isinstance(value, str) else target
+        if not isinstance(text, str):
+            return None
+
+        import re
+
+        match = re.search(
+            r"(\d+)\s*,\s*(\d+)\s*(?:->|to)\s*(\d+)\s*,\s*(\d+)",
+            text,
+            re.IGNORECASE,
+        )
+        if match:
+            return (
+                int(match.group(1)),
+                int(match.group(2)),
+                int(match.group(3)),
+                int(match.group(4)),
+            )
+
+        return None
 
     @staticmethod
     def _parse_coordinates(text: str) -> Optional[Tuple[int, int]]:

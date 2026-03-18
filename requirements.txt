@@ -35,3 +35,5 @@ python-dotenv                      # Environment variable management
 
 # --- HTTP (local only, for Ollama communication) ---
 requests                           # HTTP client for local Ollama API
+pytest>=7.0.0
+pytest-timeout>=2.1.0

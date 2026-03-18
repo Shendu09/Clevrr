@@ -1,38 +1,24 @@
-import logging
 import sys
+
+import pytest
 import yaml
-import time
+
 sys.path.append('.')
 
 from agents.orchestrator import Orchestrator
 
-# Setup logging to console
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
 
-try:
+@pytest.mark.timeout(180)
+def test_full_flow_open_notepad_and_type_bushu():
     with open("config/settings.yaml", "r") as f:
         config = yaml.safe_load(f)
-except FileNotFoundError:
-    print("Config file not found, using default.")
-    config = {}
 
-print("Initializing Orchestrator...")
-try:
-    orch = Orchestrator(config)
-    print("Orchestrator initialized.")
+    config['memory']['db_path'] = 'data/test_full_flow_memory.db'
+    orchestrator = Orchestrator(config)
+    result = orchestrator.run_task("open notepad and type bushu")
 
-    print("\nXXX Running task: 'open notepad and type hello'")
-    result = orch.run_task("open notepad and type hello")
-
-    print("\nXXX Execution Result:")
-    import json
-    print(json.dumps(result, indent=2, default=str))
-
-except Exception as e:
-    print(f"\nXXX detailed error: {e}")
-    import traceback
-    traceback.print_exc()
+    assert isinstance(result, dict), "Orchestrator run_task must return a dictionary"
+    assert "success" in result, "Result missing 'success' key"
+    assert "steps_completed" in result, "Result missing 'steps_completed' key"
+    assert "total_steps" in result, "Result missing 'total_steps' key"
+    assert result["total_steps"] > 0, "Planner produced zero steps"
