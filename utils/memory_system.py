@@ -50,20 +50,10 @@ class MemorySystem:
         # Initialize database
         self.initialize_db()
 
-        # Load local sentence-transformers model for semantic search
-        # Downloads once on first use, then works fully offline.
+        # Lazy-load sentence-transformers model for semantic search on first use
+        # (avoids torch import issues during startup)
         self._embedder = None
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("Sentence-transformers model loaded (local).")
-        except Exception as exc:
-            logger.warning(
-                "Sentence-transformers not available: %s. "
-                "Semantic search will fall back to keyword matching.",
-                exc,
-            )
+        self._embedder_loaded = False
 
     # ------------------------------------------------------------------
     # Database Setup
@@ -469,6 +459,31 @@ class MemorySystem:
             ],
         }
 
+    def clear_old_episodes(self, days: int = 7) -> int:
+        """Delete episodes older than the given number of days.
+
+        Args:
+            days: Age threshold in days.
+
+        Returns:
+            Number of deleted episodes.
+        """
+        with self._connect() as conn:
+            before = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+            conn.execute(
+                """
+                DELETE FROM episodes
+                WHERE datetime(timestamp) < datetime('now', ?)
+                """,
+                (f"-{int(days)} days",),
+            )
+            conn.commit()
+            after = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+
+        removed = max(0, before - after)
+        logger.info("Removed %d old episodes (>%d days).", removed, days)
+        return removed
+
     # ------------------------------------------------------------------
     # Private Helpers
     # ------------------------------------------------------------------
@@ -486,8 +501,27 @@ class MemorySystem:
         Returns:
             Numpy array embedding or None if embedder unavailable.
         """
-        if self._embedder is None or not text:
+        if not text:
             return None
+        
+        # Lazy-load embedder on first use
+        if not self._embedder_loaded:
+            self._embedder_loaded = True
+            try:
+                from sentence_transformers import SentenceTransformer
+                self._embedder = SentenceTransformer("all-MiniLM-L6-v2")
+                logger.info("Sentence-transformers model loaded (local).")
+            except Exception as exc:
+                logger.warning(
+                    "Sentence-transformers not available: %s. "
+                    "Semantic search will fall back to keyword matching.",
+                    exc,
+                )
+                self._embedder = None
+        
+        if self._embedder is None:
+            return None
+        
         try:
             return self._embedder.encode(text, convert_to_numpy=True)
         except Exception as exc:

@@ -119,7 +119,32 @@ sudo apt install ffmpeg
 
 ---
 
-## 🚀 Step 5: First Run
+## 🌐 Step 5: Install Browser Automation (Optional)
+
+For browser control and WhatsApp Web automation:
+
+```bash
+# Install Playwright browser drivers
+python -m playwright install chromium
+```
+
+This downloads Chromium for Playwright (one-time download, ~150 MB).
+
+---
+
+## 🎮 Step 6: Install Windows App Control (Windows Only)
+
+For controlling desktop apps like Spotify, Discord, etc:
+
+```bash
+# Already included in requirements.txt
+# Just verify installation:
+python -c "import uiautomation; print('UIAutomation OK')"
+```
+
+---
+
+## 🚀 Step 7: First Run
 
 ### Quick Setup Wizard
 ```bash
@@ -170,6 +195,47 @@ python main.py --task "Open File Explorer and navigate to Documents"
 
 # Launch dashboard for interactive use
 python main.py
+```
+
+### Voice Command Examples
+
+With voice mode enabled (`--mode layer --voice`):
+
+**Messaging:**
+```
+"Hey Clevrr, send whatsapp to Mom hello how are you"
+"Hey Clevrr, read whatsapp from John"
+```
+
+**Music Control:**
+```
+"Hey Clevrr, play music"
+"Hey Clevrr, play song Blinding Lights"
+"Hey Clevrr, skip song"
+"Hey Clevrr, pause music"
+"Hey Clevrr, volume up"
+```
+
+**Browser:**
+```
+"Hey Clevrr, go to youtube.com"
+"Hey Clevrr, search for python tutorials"
+"Hey Clevrr, open website github.com"
+"Hey Clevrr, read page"
+"Hey Clevrr, new tab"
+```
+
+**System:**
+```
+"Hey Clevrr, take screenshot"
+"Hey Clevrr, open discord"
+"Hey Clevrr, system health"
+```
+
+**Instinct Learning:**
+```
+"Hey Clevrr, what have you learned"
+"Hey Clevrr, export knowledge"
 ```
 
 ---

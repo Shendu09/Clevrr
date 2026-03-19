@@ -16,6 +16,12 @@ pyautogui                          # Mouse + keyboard automation
 pywinauto; sys_platform == "win32" # Semantic UI element finding (Windows only)
 mss                                # Multi-monitor screen capture
 opencv-python                      # Image processing and comparison
+uiautomation; sys_platform == "win32"  # Windows UI Automation (Windows only)
+pyperclip                          # Clipboard access for text pasting
+
+# --- App Control ---
+playwright                         # Browser automation (all platforms)
+pytesseract                        # OCR support (optional, for advanced vision)
 
 # --- Local AI (Voice) ---
 openai-whisper                     # Offline speech-to-text (runs locally)

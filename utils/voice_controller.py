@@ -47,6 +47,35 @@ class VoiceController:
         "minimize": "minimize_window",
     }
 
+    INSTINCT_COMMANDS = {
+        "what have you learned": "instinct_status",
+        "show instincts": "instinct_status",
+        "forget that": "clear_last_instinct",
+        "remember this": "save_current_instinct",
+        "export knowledge": "export_instincts",
+    }
+
+    APP_VOICE_COMMANDS = {
+        # WhatsApp
+        "send whatsapp to": "whatsapp_send",
+        "read whatsapp": "whatsapp_read",
+        "open whatsapp": "open_whatsapp",
+        # Spotify
+        "play music": "spotify_play",
+        "pause music": "spotify_pause",
+        "skip song": "spotify_skip",
+        "previous song": "spotify_previous",
+        "volume up": "spotify_volume_up",
+        "volume down": "spotify_volume_down",
+        # Browser
+        "go to": "browser_navigate",
+        "search for": "browser_search",
+        "open website": "browser_navigate",
+        "new tab": "browser_new_tab",
+        "close tab": "browser_close_tab",
+        "read page": "browser_read",
+    }
+
     def __init__(self, config, app_launcher=None):
         voice_cfg = config.get("voice", {})
         model_size = voice_cfg.get("whisper_model", "tiny")
@@ -70,6 +99,26 @@ class VoiceController:
 
     def process_command(self, text: str) -> dict:
         text_lower = text.lower().strip()
+
+        for phrase, action in self.INSTINCT_COMMANDS.items():
+            if phrase in text_lower:
+                return {
+                    "type": "instinct_management",
+                    "action": action,
+                    "spoke": True,
+                }
+
+        # Check app-specific voice commands
+        for phrase, action in self.APP_VOICE_COMMANDS.items():
+            if phrase in text_lower:
+                parts = text_lower.split(phrase, 1)
+                target = parts[1].strip() if len(parts) > 1 else ""
+                return {
+                    "type": "app_action",
+                    "action": action,
+                    "target": target,
+                    "original": text,
+                }
 
         for cmd in self.OPEN_COMMANDS:
             if text_lower.startswith(cmd):

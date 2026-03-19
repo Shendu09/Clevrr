@@ -16,6 +16,30 @@ Advanced Clevrr runs computer-control automation locally and supports two runtim
 - Voice control pipeline using Whisper tiny for low-latency routing
 - Threat scanning and optional voice-auth checks before execution
 - Safety guard decisions for block / confirm / allow behavior
+- ECC-inspired task intelligence layer with instincts, hooks, checkpoints, and dynamic skills
+- Universal app control with automatic fallback chain (App-specific → Browser → UIAutomation → Vision)
+
+## New AI Layer Systems
+
+The layer mode now includes five integrated intelligence modules:
+
+- Instinct System (`core/instinct_system.py`): learns successful task patterns and reuses high-confidence actions instantly
+- Hook System (`core/hook_system.py`): non-blocking lifecycle events for task start, completion, failures, and session activity
+- Verification Loop (`core/verification_loop.py`): saves checkpoints and verifies task-step outcomes
+- Skills Loader (`core/skills_loader.py`): loads relevant `SKILL.md` guidance based on task intent
+- Memory Optimizer (`core/memory_optimizer.py`): compacts old memory episodes when storage pressure rises
+
+These are orchestrated in `core/ai_layer.py` and run asynchronously where possible to keep command response fast.
+
+## Universal App Control
+
+Advanced Clevrr can control any app through layered routing in `app_control/universal_controller.py`:
+
+- WhatsApp: web automation through Playwright (`app_control/whatsapp_controller.py`)
+- Spotify: desktop media control and shortcuts (`app_control/spotify_controller.py`)
+- Browser actions: navigate/search/read/new-tab/click/type (`app_control/browser_controller.py`)
+- Desktop UI control: Windows UI Automation for app windows/elements (`app_control/uia_controller.py`)
+- Vision fallback: screenshot + local vision model guidance when semantic control is unavailable (`app_control/vision_controller.py`)
 
 ## Runtime Modes
 
@@ -33,7 +57,7 @@ python main.py --mode layer
 python main.py --mode layer --voice
 ```
 
-Layer mode routes common voice actions directly (open/close apps, screenshot, show desktop, system health, window layout) and falls back to orchestrator for complex tasks.
+Layer mode routes common voice actions directly (open/close apps, screenshot, show desktop, system health, window layout, messaging/media/browser control), checks instincts first, and falls back to orchestrator for complex tasks.
 
 ## Voice Command Examples (Layer Mode)
 
@@ -42,6 +66,10 @@ Layer mode routes common voice actions directly (open/close apps, screenshot, sh
 - System actions: take screenshot, show desktop, lock computer
 - Utility actions: organize downloads, system health, what is open
 - Window layout: side by side
+- Browser control: go to youtube.com, search for python tutorials, open new tab, close tab
+- Spotify control: play spotify, pause spotify, skip song, volume up
+- WhatsApp control: send whatsapp to mom hello, read whatsapp messages
+- Instinct control: what have you learned, remember this pattern, forget that instinct
 
 ## Security and Safety Flow
 
@@ -72,7 +100,7 @@ The following are downloaded automatically on first run:
 ```bash
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
-.venv\Scripts\python.exe -m pip install soundfile sounddevice numpy scipy
+.venv\Scripts\python.exe -m playwright install chromium
 ```
 
 Then run from the project folder:
@@ -81,6 +109,8 @@ Then run from the project folder:
 cd advanced-clevrr
 python main.py --mode layer --voice
 ```
+
+Note (Windows): use UTF-8 terminal output when possible to avoid Unicode banner rendering issues in legacy console encodings.
 
 ## Validation
 

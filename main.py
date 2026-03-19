@@ -312,6 +312,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # ── Set UTF-8 encoding for Windows console ──
+    import sys
+    if sys.stdout.encoding != 'utf-8':
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
     # ── Print banner ──
     print(BANNER)
 
