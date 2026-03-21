@@ -10,6 +10,7 @@ import os
 import tempfile
 import threading
 import time
+from typing import Optional
 
 
 class VoiceController:
@@ -87,25 +88,81 @@ class VoiceController:
     }
 
     def __init__(self, config, app_launcher=None):
+        self.config = config
         voice_cfg = config.get("voice", {})
         model_size = voice_cfg.get("whisper_model", "tiny")
+        self.enabled = voice_cfg.get("enabled", True)
+        self._model_size = model_size
 
-        print(f"[Voice] Loading Whisper {model_size}...")
-        import whisper
-
-        self.model = whisper.load_model(model_size)
-        print("[Voice] Whisper ready")
+        self.model = None
+        self.tts = None
+        self._pipeline = None
+        self._pipeline_active = False
 
         self.app_launcher = app_launcher
         self.wake_word = voice_cfg.get("wake_word", "hey clevrr")
         self.running = False
         self.callback = None
 
+        self._load_whisper()
+        self._load_tts()
+
+    def _load_whisper(self):
+        if self.model is not None:
+            return
+
+        print(f"[Voice] Loading Whisper {self._model_size}...")
+        import whisper
+
+        self.model = whisper.load_model(self._model_size)
+        print("[Voice] Whisper ready")
+
+    def _load_tts(self):
+        if self.tts is not None:
+            return
+
+        voice_cfg = self.config.get("voice", {})
         import pyttsx3
 
         self.tts = pyttsx3.init()
         self.tts.setProperty("rate", voice_cfg.get("tts_rate", 200))
         self.tts.setProperty("volume", voice_cfg.get("tts_volume", 0.9))
+
+    def _build_voice_pipeline(self):
+        try:
+            from core.voice import VoiceConfig, VoicePipeline
+
+            voice_cfg = self.config.get("voice", {})
+            wake_word = voice_cfg.get("wake_word", "hey clevrr").strip().lower()
+            wake_words = [wake_word]
+            if wake_word.startswith("hey "):
+                stripped = wake_word.replace("hey ", "", 1).strip()
+                if stripped:
+                    wake_words.append(stripped)
+
+            pipeline_config = VoiceConfig(
+                wake_words=[word for word in wake_words if word],
+                sample_rate=int(voice_cfg.get("sample_rate", 16000)),
+                channels=int(voice_cfg.get("channels", 1)),
+                chunk_duration_ms=int(voice_cfg.get("chunk_duration_ms", 30)),
+                silence_threshold_ms=int(voice_cfg.get("silence_threshold_ms", 800)),
+                max_recording_ms=int(voice_cfg.get("max_recording_ms", 10000)),
+                whisper_model=str(voice_cfg.get("whisper_model", "base")),
+                whisper_device=str(voice_cfg.get("whisper_device", "cuda")),
+                whisper_compute_type=str(voice_cfg.get("whisper_compute_type", "float16")),
+                vad_aggressiveness=int(voice_cfg.get("vad_aggressiveness", 2)),
+                language=str(voice_cfg.get("language", "en")),
+                enabled=self.enabled,
+            )
+
+            def _on_command(command: str):
+                if self.callback:
+                    self.callback(command)
+
+            return VoicePipeline(config=pipeline_config, on_command=_on_command)
+        except Exception as exc:
+            print(f"[Voice] New pipeline unavailable, using legacy mode: {exc}")
+            return None
 
     def process_command(self, text: str) -> dict:
         text_lower = text.lower().strip()
@@ -179,6 +236,8 @@ class VoiceController:
         }
 
     def listen_once(self) -> str:
+        self._load_whisper()
+
         import sounddevice as sd
         import soundfile as sf
 
@@ -225,6 +284,8 @@ class VoiceController:
         ).start()
 
     def _listen_loop(self):
+        self._load_whisper()
+
         import numpy as np
         import sounddevice as sd
         import soundfile as sf
@@ -268,6 +329,25 @@ class VoiceController:
 
     def stop(self):
         self.running = False
+        if self._pipeline:
+            try:
+                self._pipeline.stop()
+            except Exception:
+                pass
+        self._pipeline_active = False
 
     def start_background_listening(self, callback):
+        self.callback = callback
+        self._pipeline = self._build_voice_pipeline()
+        if self._pipeline:
+            try:
+                self._pipeline.start()
+                self._pipeline_active = True
+                print("[Voice] Background listener started (core.voice pipeline)")
+                return
+            except Exception as exc:
+                self._pipeline = None
+                self._pipeline_active = False
+                print(f"[Voice] Pipeline start failed, falling back to legacy mode: {exc}")
+
         self.start_listening(callback)
