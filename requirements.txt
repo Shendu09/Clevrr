@@ -49,3 +49,10 @@ requests                           # HTTP client for local Ollama API
 msgpack>=1.0
 pytest>=7.0.0
 pytest-timeout>=2.1.0
+auth0-python>=4.7.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+flask>=3.0.0
+langchain>=0.3.0
+langgraph>=0.4.0
+langchain-openai>=0.6.0
