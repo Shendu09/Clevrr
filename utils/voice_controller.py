@@ -76,6 +76,16 @@ class VoiceController:
         "read page": "browser_read",
     }
 
+    COMPETITIVE_COMMANDS = {
+        "solve this": "solve_screen",
+        "read and solve": "solve_screen",
+        "solve in python": "solve_python",
+        "solve in java": "solve_java",
+        "solve in c++": "solve_cpp",
+        "write solution": "solve_screen",
+        "solve the problem": "solve_screen",
+    }
+
     def __init__(self, config, app_launcher=None):
         voice_cfg = config.get("voice", {})
         model_size = voice_cfg.get("whisper_model", "tiny")
@@ -106,6 +116,15 @@ class VoiceController:
                     "type": "instinct_management",
                     "action": action,
                     "spoke": True,
+                }
+
+        for phrase, action in self.COMPETITIVE_COMMANDS.items():
+            if phrase in text_lower:
+                return {
+                    "type": "app_action",
+                    "action": action,
+                    "target": "",
+                    "original": text,
                 }
 
         # Check app-specific voice commands

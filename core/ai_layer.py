@@ -12,6 +12,7 @@ from core.memory_optimizer import MemoryOptimizer
 from core.skills_loader import SkillsLoader
 from core.verification_loop import VerificationLoop
 from app_control.universal_controller import UniversalController
+from agents.competitive_programmer import CompetitiveProgrammer
 from utils.safety_guard import SafetyGuard
 from utils.screen_capture import ScreenCapture
 from utils.voice_controller import VoiceController
@@ -43,6 +44,7 @@ class AILayer:
         self.process_manager = ProcessManager()
         self.file_manager = FileManager()
         self.screen_capture = ScreenCapture(config)
+        self.cp_agent = CompetitiveProgrammer(self.ollama, self.screen_capture)
 
         self.instincts = InstinctSystem(self.ollama, self.memory)
         self.hooks = HookSystem()
@@ -326,6 +328,25 @@ class AILayer:
     ) -> dict:
         """Handle universal app actions."""
         ctrl = self.universal_controller
+
+        if action in ["solve_screen", "solve_python", "solve_java", "solve_cpp"]:
+            language = "python"
+
+            if action == "solve_java" or "java" in original_text.lower():
+                language = "java"
+            elif action == "solve_cpp" or "c++" in original_text.lower():
+                language = "cpp"
+            elif action == "solve_python":
+                language = "python"
+
+            self.voice.speak(f"Reading question and solving in {language}")
+            result = self.cp_agent.solve_from_screen(language=language, max_attempts=3)
+
+            if result.get("success"):
+                self.voice.speak("Solution found and all test cases passed")
+            else:
+                self.voice.speak("Solution written but some test cases failed")
+            return result
 
         # WhatsApp actions
         if action == "whatsapp_send":
