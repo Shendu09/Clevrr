@@ -1,101 +1,51 @@
-# Advanced Clevrr
+# Advanced Clevrr Computer
 
-Local AI computer automation powered by Ollama and Python.
+100% local AI computer-control agent built with Python + Ollama.
 
-## Overview
+No cloud APIs are required for task execution after local setup.
 
-Advanced Clevrr runs computer-control automation locally and supports two runtime paths:
+## What It Does
 
-- Orchestrator mode: full planning + execution loop
-- Layer mode: fast direct routing for common voice commands
-
-## Core Features
-
-- 100% local inference after first-time model downloads
-- Fast app launch with startup app indexing (Windows Start Menu + common install paths)
-- Voice control pipeline using Whisper tiny for low-latency routing
-- Threat scanning and optional voice-auth checks before execution
-- Safety guard decisions for block / confirm / allow behavior
-- ECC-inspired task intelligence layer with instincts, hooks, checkpoints, and dynamic skills
-- Universal app control with automatic fallback chain (App-specific → Browser → UIAutomation → Vision)
-
-## New AI Layer Systems
-
-The layer mode now includes five integrated intelligence modules:
-
-- Instinct System (`core/instinct_system.py`): learns successful task patterns and reuses high-confidence actions instantly
-- Hook System (`core/hook_system.py`): non-blocking lifecycle events for task start, completion, failures, and session activity
-- Verification Loop (`core/verification_loop.py`): saves checkpoints and verifies task-step outcomes
-- Skills Loader (`core/skills_loader.py`): loads relevant `SKILL.md` guidance based on task intent
-- Memory Optimizer (`core/memory_optimizer.py`): compacts old memory episodes when storage pressure rises
-
-These are orchestrated in `core/ai_layer.py` and run asynchronously where possible to keep command response fast.
-
-## Universal App Control
-
-Advanced Clevrr can control any app through layered routing in `app_control/universal_controller.py`:
-
-- WhatsApp: web automation through Playwright (`app_control/whatsapp_controller.py`)
-- Spotify: desktop media control and shortcuts (`app_control/spotify_controller.py`)
-- Browser actions: navigate/search/read/new-tab/click/type (`app_control/browser_controller.py`)
-- Desktop UI control: Windows UI Automation for app windows/elements (`app_control/uia_controller.py`)
-- Vision fallback: screenshot + local vision model guidance when semantic control is unavailable (`app_control/vision_controller.py`)
+- Runs natural-language computer tasks through an orchestrator agent
+- Supports a fast AI Layer mode for common voice/system actions
+- Controls apps via a fallback chain: app-specific → browser → UIAutomation → vision
+- Adds local memory, semantic recall, safety rules, and threat checks
+- Supports optional always-on voice control with wake word routing
 
 ## Runtime Modes
 
-### 1) Orchestrator Mode (default)
+- `orchestrator` (default): full planning/execution loop
+- `layer`: fast routing path with instincts/hooks/checkpoints + orchestrator fallback
+
+Run modes:
 
 ```bash
 python main.py
-python main.py --voice
-```
-
-### 2) Layer Mode (fast routing)
-
-```bash
+python main.py --mode orchestrator
 python main.py --mode layer
 python main.py --mode layer --voice
 ```
 
-Layer mode routes common voice actions directly (open/close apps, screenshot, show desktop, system health, window layout, messaging/media/browser control), checks instincts first, and falls back to orchestrator for complex tasks.
+## Prerequisites
 
-## Voice Command Examples (Layer Mode)
+- Python 3.10+
+- Ollama installed and running locally (`http://localhost:11434`)
+- Required Ollama models:
+  - `llava`
+  - `llama3`
 
-- Open/launch apps: open chrome, launch notepad, start calculator
-- Close apps/windows: close chrome, quit notepad
-- System actions: take screenshot, show desktop, lock computer
-- Utility actions: organize downloads, system health, what is open
-- Window layout: side by side
-- Browser control: go to youtube.com, search for python tutorials, open new tab, close tab
-- Spotify control: play spotify, pause spotify, skip song, volume up
-- WhatsApp control: send whatsapp to mom hello, read whatsapp messages
-- Instinct control: what have you learned, remember this pattern, forget that instinct
+Install and verify Ollama:
 
-## Security and Safety Flow
+```bash
+ollama serve
+ollama pull llava
+ollama pull llama3
+ollama list
+```
 
-Before task execution in layer mode:
+## Installation
 
-1. Threat detector scans command text for high-risk patterns
-2. Voice command is checked for injection-like content
-3. Safety rules apply block/confirm/allow policy
-4. Optional voice authentication can be enforced via settings
-
-Main components:
-
-- security/threat_detector.py
-- security/voice_authenticator.py
-- utils/safety_guard.py
-
-## First Run Downloads (One Time Only)
-
-The following are downloaded automatically on first run:
-
-- Ollama models (llava + llama3) ~8GB total
-  - Equivalent manual setup: ollama pull llava and ollama pull llama3
-- Sentence Transformers model (all-MiniLM-L6-v2) ~90MB
-  - Pulled from Hugging Face once; after this, semantic features run offline
-
-## Quick Setup
+From the `advanced-clevrr` folder:
 
 ```bash
 python -m venv .venv
@@ -103,26 +53,98 @@ python -m venv .venv
 .venv\Scripts\python.exe -m playwright install chromium
 ```
 
-Then run from the project folder:
+## First-Time Setup Wizard
+
+Use built-in setup checks for Python, Ollama, models, dependencies, and directories:
 
 ```bash
-cd advanced-clevrr
+python main.py --setup
+```
+
+## CLI Usage
+
+Main options from `main.py`:
+
+```bash
+python main.py --help
+```
+
+Examples:
+
+```bash
+# Dashboard (default)
+python main.py
+
+# Voice-enabled orchestrator mode
+python main.py --voice
+
+# Layer mode with voice
 python main.py --mode layer --voice
+
+# Run one task and exit
+python main.py --task "Open Notepad and type hello"
+
+# Floating overlay UI
+python main.py --ui floating
+
+# No UI (usually with --task)
+python main.py --ui none --task "Take screenshot"
+
+# Override vision model from config
+python main.py --model llava
 ```
 
-Note (Windows): use UTF-8 terminal output when possible to avoid Unicode banner rendering issues in legacy console encodings.
+## Key Components
 
-## Validation
+- `core/ai_layer.py`: high-speed routing layer
+- `core/instinct_system.py`: reusable action patterns
+- `core/hook_system.py`: async lifecycle hooks
+- `core/verification_loop.py`: checkpoints + step verification
+- `core/skills_loader.py`: intent-based skill loading
+- `core/memory_optimizer.py`: memory compaction
+- `agents/orchestrator.py`: full orchestrator pipeline
+- `app_control/universal_controller.py`: multi-controller fallback router
+- `security/threat_detector.py`: prompt/threat scanning
+- `utils/safety_guard.py`: allow/confirm/block policy enforcement
 
-Current test status:
+## Voice and Safety
+
+Voice behavior and auth are configured in `config/settings.yaml`:
+
+- `voice.enabled`
+- `voice.wake_word`
+- `voice.require_voice_auth`
+- `voice.auth_threshold`
+
+Safety rules are defined in:
+
+- `config/safety_rules.yaml`
+
+## Tests
+
+Run tests from the project root:
 
 ```bash
-.venv\Scripts\python.exe -m pytest -v
+python -m pytest -v
 ```
 
-Expected result: all tests passing.
+## Troubleshooting
 
-## Notes
+- If startup fails, run `python main.py --setup` first.
+- If Ollama check fails, ensure `ollama serve` is running.
+- If model pull fails, run pulls manually (`ollama pull llava`, `ollama pull llama3`).
+- If browser control fails, reinstall Playwright Chromium.
 
-- If you run python main.py from the parent folder, Windows will show file not found for main.py.
-- Use the project directory as the working directory before launching.
+## Project Structure (High Level)
+
+```text
+advanced-clevrr/
+  agents/        # planning/execution/validation agents
+  app_control/   # app/browser/uia/vision controllers
+  core/          # AI layer systems, hooks, verification, memory optimizer
+  security/      # threat detection + voice auth
+  ui/            # gradio dashboard + floating UI
+  utils/         # ollama, memory, safety, voice, capture utilities
+  config/        # settings + safety rules
+  data/          # logs, screenshots, runtime data
+```

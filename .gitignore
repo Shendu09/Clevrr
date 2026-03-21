@@ -48,3 +48,39 @@ desktop.ini
 # Logs
 logs/
 *.log
+
+# Test databases (auto-generated)
+data/test_*.db
+data/test_*_*.db
+
+# Runtime screenshots
+data/screenshots/
+
+# Runtime solutions
+data/solutions/
+
+# Runtime logs
+data/logs/
+data/safety_log.txt
+
+# Runtime databases
+data/instincts.db
+data/memory.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/settings.json
+.idea/

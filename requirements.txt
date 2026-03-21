@@ -25,8 +25,11 @@ pytesseract                        # OCR support (optional, for advanced vision)
 
 # --- Local AI (Voice) ---
 openai-whisper                     # Offline speech-to-text (runs locally)
+faster-whisper                     # Faster local transcription backend
 pyttsx3                            # Offline text-to-speech (runs locally)
 sounddevice                        # Microphone audio recording
+webrtcvad                          # Voice activity detection
+openwakeword                       # Wake-word detection backend
 soundfile                          # Audio file handling
 scipy                              # Signal processing utilities
 
@@ -43,5 +46,6 @@ python-dotenv                      # Environment variable management
 
 # --- HTTP (local only, for Ollama communication) ---
 requests                           # HTTP client for local Ollama API
+msgpack>=1.0
 pytest>=7.0.0
 pytest-timeout>=2.1.0

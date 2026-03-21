@@ -36,8 +36,10 @@ class OllamaClient:
         """
         ollama_config = config.get("ollama", {})
         self.base_url: str = ollama_config.get("url", "http://localhost:11434")
+        self.url: str = self.base_url
         self.vision_model: str = ollama_config.get("vision_model", "llava")
         self.text_model: str = ollama_config.get("text_model", "llama3")
+        self.code_model: str = ollama_config.get("code_model", "qwen2.5-coder:7b")
         self.timeout: int = ollama_config.get("timeout", 60)
         self.max_retries: int = ollama_config.get("max_retries", 3)
 
@@ -102,8 +104,10 @@ class OllamaClient:
             )
             if resp.status_code == 200:
                 models = resp.json().get("models", [])
-                available = [m.get("name", "").split(":")[0] for m in models]
-                return model_name in available
+                available_names = [m.get("name", "") for m in models]
+                available_bases = [name.split(":")[0] for name in available_names]
+                target_base = model_name.split(":")[0]
+                return model_name in available_names or target_base in available_bases
             return False
         except Exception as exc:
             logger.error("Error checking model availability: %s", exc)
@@ -274,6 +278,65 @@ class OllamaClient:
 
         return "Error: Text generation failed after all retries."
 
+    def generate_code(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Generate code using a code-specialized model with text fallback.
+
+        Uses qwen2.5-coder by default for programming tasks.
+        Falls back to the text model if the code model is unavailable
+        or generation fails.
+        """
+        code_model = self.code_model or "qwen2.5-coder:7b"
+
+        if not self.check_model_available(code_model):
+            logger.warning(
+                "Code model %s not found. Run: ollama pull %s",
+                code_model,
+                code_model,
+            )
+            return self.generate(prompt, system_prompt)
+
+        payload: Dict[str, Any] = {
+            "model": code_model,
+            "prompt": prompt,
+            "system": system_prompt
+            or (
+                "You are an expert competitive programmer. "
+                "Write optimal, correct code only. "
+                "No explanations. No markdown. Raw code only."
+            ),
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "top_p": 0.95,
+                "num_predict": 4096,
+                "repeat_penalty": 1.1,
+            },
+        }
+
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                timeout=120,
+            )
+            if response.status_code == 200:
+                result = response.json().get("response", "")
+                logger.info("Code generated using %s", code_model)
+                return result
+
+            logger.error(
+                "Code model request failed with HTTP %d; falling back to text model",
+                response.status_code,
+            )
+            return self.generate(prompt, system_prompt)
+        except Exception as exc:
+            logger.error("Code model failed: %s", exc)
+            return self.generate(prompt, system_prompt)
+
     def extract_json(self, text: str) -> dict:
        # Method 1: direct parse
        try:
@@ -347,6 +410,7 @@ class OllamaClient:
             "models": [],
             "vision_model_ready": False,
             "text_model_ready": False,
+            "code_model_ready": False,
             "response_time_ms": None,
         }
 
@@ -380,6 +444,9 @@ class OllamaClient:
                 )
                 report["text_model_ready"] = (
                     self.text_model in model_names
+                )
+                report["code_model_ready"] = (
+                    self.code_model.split(":")[0] in model_names
                 )
         except Exception as exc:
             logger.warning("Error listing models: %s", exc)
