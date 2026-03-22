@@ -56,3 +56,6 @@ flask>=3.0.0
 langchain>=0.3.0
 langgraph>=0.4.0
 langchain-openai>=0.6.0
+pyautogui>=0.9.54
+mss>=9.0.1
+Pillow>=10.0.0
