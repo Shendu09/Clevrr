@@ -2,7 +2,8 @@
 
 100% local AI computer-control agent built with Python + Ollama.
 
-No cloud APIs are required for task execution after local setup.
+No cloud APIs are required for core task execution after local setup.
+Optional Auth0 integration is available for connected third-party actions.
 
 ## What It Does
 
@@ -11,6 +12,8 @@ No cloud APIs are required for task execution after local setup.
 - Controls apps via a fallback chain: app-specific → browser → UIAutomation → vision
 - Adds local memory, semantic recall, safety rules, and threat checks
 - Supports optional always-on voice control with wake word routing
+- Supports optional Auth0 Token Vault-based action execution (Gmail/GitHub/Calendar)
+- Includes an AI Brain layer for intent parsing, routing, and response publishing
 
 ## Runtime Modes
 
@@ -52,6 +55,23 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe -m playwright install chromium
 ```
+
+## Optional Auth0 Setup (Token Vault)
+
+If you want connected service actions (Gmail/GitHub/Calendar), configure Auth0 credentials:
+
+```bash
+copy .env.example .env
+```
+
+Set these keys in `.env`:
+
+- `AUTH0_DOMAIN`
+- `AUTH0_CLIENT_ID`
+- `AUTH0_CLIENT_SECRET`
+- `AUTH0_AUDIENCE`
+
+Security note: never commit `.env`.
 
 ## First-Time Setup Wizard
 
@@ -96,6 +116,13 @@ python main.py --model llava
 
 ## Key Components
 
+- `core/security/`: RBAC, threat detection, sandbox execution, audit logging
+- `core/service/`: system service runtime components
+- `core/bus/`: optimized IPC message bus
+- `core/voice/`: voice capture, wake-word, transcription, and pipeline
+- `core/auth/`: Auth0 config, token vault, step-up auth, consent manager
+- `core/brain/`: intent parser, action router, memory, and brain engine
+- `actions/`: Gmail/GitHub/Calendar action implementations
 - `core/ai_layer.py`: high-speed routing layer
 - `core/instinct_system.py`: reusable action patterns
 - `core/hook_system.py`: async lifecycle hooks
@@ -104,7 +131,7 @@ python main.py --model llava
 - `core/memory_optimizer.py`: memory compaction
 - `agents/orchestrator.py`: full orchestrator pipeline
 - `app_control/universal_controller.py`: multi-controller fallback router
-- `security/threat_detector.py`: prompt/threat scanning
+- `core/security/threat_detector.py`: prompt/threat scanning
 - `utils/safety_guard.py`: allow/confirm/block policy enforcement
 
 ## Voice and Safety
@@ -128,6 +155,14 @@ Run tests from the project root:
 python -m pytest -v
 ```
 
+Current suite includes:
+
+- `tests/test_security.py`
+- `tests/test_bus.py`
+- `tests/test_voice.py`
+- `tests/test_auth.py`
+- `tests/test_brain.py`
+
 ## Troubleshooting
 
 - If startup fails, run `python main.py --setup` first.
@@ -139,10 +174,10 @@ python -m pytest -v
 
 ```text
 advanced-clevrr/
+  actions/       # connected service actions (gmail/github/calendar)
   agents/        # planning/execution/validation agents
   app_control/   # app/browser/uia/vision controllers
-  core/          # AI layer systems, hooks, verification, memory optimizer
-  security/      # threat detection + voice auth
+  core/          # security, service, bus, voice, auth, brain, ai-layer systems
   ui/            # gradio dashboard + floating UI
   utils/         # ollama, memory, safety, voice, capture utilities
   config/        # settings + safety rules
