@@ -1,5 +1,9 @@
 """Real-time Dashboard for Event Loop Monitoring
 
+⚠️ DEPRECATED: This module is kept for reference but is no longer used.
+Use the main Gradio dashboard (ui/dashboard.py) instead, which now includes
+performance metrics and system monitoring features.
+
 Provides real-time visibility into event loop state, tasks, and metrics.
 Inspired by CLOVIS-style system monitoring.
 """
