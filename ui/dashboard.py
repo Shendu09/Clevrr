@@ -229,6 +229,33 @@ def create_dashboard(
             voice_controller.stop()
             return "🔇 Voice mode DISABLED."
 
+    def get_performance_metrics() -> str:
+        """Get performance and system metrics."""
+        try:
+            task_history = orchestrator.memory.get_all_episodes() if hasattr(orchestrator, 'memory') else []
+            
+            total_tasks = len(task_history)
+            successful = sum(1 for t in task_history if t.get('success', False))
+            failed = total_tasks - successful
+            
+            success_rate = (successful / total_tasks * 100) if total_tasks > 0 else 0
+            
+            lines = [
+                "### 📈 Performance Metrics",
+                "",
+                f"| Metric | Value |",
+                f"|--------|-------|",
+                f"| Total Tasks | {total_tasks} |",
+                f"| Successful | {successful} ({success_rate:.1f}%) |",
+                f"| Failed | {failed} |",
+                f"| Session Active | Started |",
+            ]
+            
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error(f"Error getting metrics: {e}")
+            return "Could not load metrics."
+
     # ── Build the UI ──────────────────────────────────────────
 
     with gr.Blocks(
@@ -351,6 +378,18 @@ def create_dashboard(
                     elem_id="refresh_memory_btn",
                 )
 
+            # ── Performance Metrics ──
+            with gr.Column():
+                gr.Markdown("### 📈 Performance")
+                metrics_md = gr.Markdown(
+                    value="Click 'Refresh' to load metrics.",
+                    elem_id="metrics_md",
+                )
+                refresh_metrics_btn = gr.Button(
+                    "🔄 Refresh Metrics",
+                    elem_id="refresh_metrics_btn",
+                )
+
             # ── System Status ──
             with gr.Column():
                 gr.Markdown("### ⚙️ System Health")
@@ -400,6 +439,11 @@ def create_dashboard(
         refresh_memory_btn.click(
             fn=get_memory_stats,
             outputs=[memory_md],
+        )
+
+        refresh_metrics_btn.click(
+            fn=get_performance_metrics,
+            outputs=[metrics_md],
         )
 
         refresh_system_btn.click(
