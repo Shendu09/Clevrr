@@ -19,6 +19,7 @@ from core.brain.config import BrainConfig
 from core.brain.intent_parser import IntentParser
 from core.computer_use import AgentRegistry, ComputerUseConfig
 from core.security import Role, SecurityGateway, User
+from dashboard.live_tester import LiveTester
 
 app = Flask(__name__)
 START_TIME = time.time()
@@ -72,6 +73,7 @@ brain_config = BrainConfig()
 parser = IntentParser(brain_config)
 cu_config = ComputerUseConfig()
 registry = AgentRegistry(cu_config, gateway, "clevrr-agent")
+tester = LiveTester(gateway, brain_config, cu_config)
 
 AGENT_TASKS: list[dict] = []
 AGENT_LOCK = threading.Lock()
@@ -258,6 +260,70 @@ def api_agent_run():
 def api_agent_tasks():
     with AGENT_LOCK:
         return jsonify(list(reversed(AGENT_TASKS[-20:])))
+
+
+@app.post("/api/live/threat")
+def api_live_threat():
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("text", "")).strip()
+    if not text:
+        return jsonify({"error": "Enter text to scan"})
+    return jsonify(tester.test_threat_detection(text))
+
+
+@app.post("/api/live/brain")
+def api_live_brain():
+    data = request.get_json(silent=True) or {}
+    command = str(data.get("command", "")).strip()
+    if not command:
+        return jsonify({"error": "Enter a command"})
+    return jsonify(tester.test_brain_parsing(command))
+
+
+@app.post("/api/live/chain")
+def api_live_chain():
+    return jsonify(tester.test_audit_chain())
+
+
+@app.post("/api/live/rbac")
+def api_live_rbac():
+    data = request.get_json(silent=True) or {}
+    user_id = str(data.get("user_id", "alice"))
+    action = str(data.get("action", "file_read"))
+    return jsonify(tester.test_rbac(user_id, action))
+
+
+@app.post("/api/live/voice")
+def api_live_voice():
+    return jsonify(tester.test_voice())
+
+
+@app.post("/api/live/agent")
+def api_live_agent():
+    data = request.get_json(silent=True) or {}
+    goal = str(data.get("goal", "")).strip()
+    dry_run = bool(data.get("dry_run", True))
+    if not goal:
+        return jsonify({"error": "Enter a goal"})
+    return jsonify(tester.test_agent(goal, dry_run))
+
+
+@app.post("/api/live/all")
+def api_live_all():
+    results = tester.test_all()
+    return jsonify(
+        {
+            "results": results,
+            "total": len(results),
+            "passed": sum(1 for result in results if result.get("success")),
+            "failed": sum(1 for result in results if not result.get("success")),
+        }
+    )
+
+
+@app.get("/api/live/history")
+def api_live_history():
+    return jsonify(tester.get_history())
 
 
 @app.get("/api/verify")

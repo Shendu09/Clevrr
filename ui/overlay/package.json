@@ -1,0 +1,20 @@
+{
+  "name": "clevrr-overlay",
+  "version": "1.0.0",
+  "description": "Clevrr Transparent Overlay UI - 100% Local AI Computer Control",
+  "main": "main.js",
+  "author": "Clevrr Contributors",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  }
+}

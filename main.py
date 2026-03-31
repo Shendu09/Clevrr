@@ -284,9 +284,9 @@ def main() -> None:
 
     parser.add_argument(
         "--ui",
-        choices=["gradio", "floating", "none"],
+        choices=["gradio", "floating", "overlay", "none"],
         default="gradio",
-        help="UI mode: gradio (web dashboard), floating (overlay), none",
+        help="UI mode: gradio (web dashboard), floating (overlay), overlay (Electron transparent UI), none",
     )
     parser.add_argument(
         "--voice",
@@ -376,6 +376,7 @@ def main() -> None:
     orchestrator = None
     ai_layer = None
     voice_controller = None
+    router_service = None
 
     if args.mode == "layer":
         logger.info("Initializing AI Layer...")
@@ -400,33 +401,37 @@ def main() -> None:
 
             voice_controller = VoiceController(config)
             voice_controller.start_background_listening(
-                callback=lambda cmd: orchestrator.run_task(cmd)
+                callback=lambda cmd: router_service.handle_task(cmd) if router_service else orchestrator.run_task(cmd)
             )
             logger.info(
                 "Voice control active. Wake word: '%s'",
                 config["voice"].get("wake_word", "hey computer"),
             )
+    
+    # ── Initialize Router Service (intelligent routing layer) ──
+    logger.info("Initializing Router Service...")
+    from core.router_service import RouterService
+    
+    router_service = RouterService(
+        config,
+        orchestrator=orchestrator,
+        ai_layer=ai_layer,
+    )
+    logger.info("Router Service ready. Fast routing enabled.")
 
     # ── Single task mode ──
     if args.task:
         logger.info("Running single task: %s", args.task)
-        result = (
-            ai_layer.run_task(args.task)
-            if ai_layer
-            else orchestrator.run_task(args.task)
-        )
+        result = router_service.handle_task(args.task)
 
         print("\n" + "=" * 60)
         status = "✅ SUCCESS" if result["success"] else "❌ FAILED"
         print(f"  {status}")
-        print(f"  Task: {result.get('task', args.task)}")
-        if "steps_completed" in result and "total_steps" in result:
-            print(
-                f"  Steps: {result['steps_completed']}/{result['total_steps']}"
-            )
+        print(f"  Action: {result.get('action', 'unknown')}")
+        print(f"  Task: {args.task}")
         if "duration_seconds" in result:
             print(f"  Duration: {result['duration_seconds']:.1f}s")
-        print(f"  Outcome: {result.get('outcome', 'N/A')}")
+        print(f"  Response: {result.get('response', 'N/A')}")
         print("=" * 60 + "\n")
 
         # Cleanup
@@ -441,12 +446,55 @@ def main() -> None:
 
         launch_dashboard(orchestrator or ai_layer.orchestrator, voice_controller, config)
 
+    elif args.ui == "overlay":
+        logger.info("Launching Electron overlay with WebSocket server...")
+        from ui.overlay.server import get_overlay_server
+        import subprocess
+        import time
+        
+        # Initialize overlay server
+        overlay_server = get_overlay_server(host="localhost", port=9999)
+        overlay_server.set_router_service(router_service)
+        overlay_server.start_background()
+        
+        # Give server time to start
+        time.sleep(1)
+        
+        # Launch Electron app
+        try:
+            overlay_path = Path("ui/overlay")
+            if (overlay_path / "node_modules").exists():
+                logger.info("Launching Electron...")
+                subprocess.Popen(
+                    ["npm", "start"],
+                    cwd=str(overlay_path),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                logger.error(
+                    "Electron dependencies not installed.\n"
+                    "  Run: cd ui/overlay && npm install"
+                )
+                return
+        except Exception as e:
+            logger.error(f"Failed to launch Electron: {e}")
+            return
+        
+        # Keep main thread alive
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
+            overlay_server.is_running = False
+
     elif args.ui == "floating":
         logger.info("Launching floating UI...")
         from ui.floating_ui import FloatingUI
 
         floating = FloatingUI(
-            on_task=lambda task: (ai_layer.run_task(task) if ai_layer else orchestrator.run_task(task)),
+            on_task=lambda task: router_service.handle_task(task),
             on_cancel=lambda: (orchestrator.cancel_task() if orchestrator else "No orchestrator cancel in layer mode"),
         )
         floating.launch()
@@ -464,7 +512,7 @@ def main() -> None:
         logger.info("No UI mode. Use --task to run tasks.")
         print(
             "\n  No UI selected. Use --task 'your task' to run tasks.\n"
-            "  Or change --ui to 'gradio' or 'floating'.\n"
+            "  Or change --ui to 'gradio', 'floating', or 'overlay'.\n"
         )
 
     # Cleanup

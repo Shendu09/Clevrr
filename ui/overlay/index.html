@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clevrr Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Main canvas for drawing boxes, text, etc */
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* Input bar container (bottom-center) */
+        #input-container {
+            position: fixed;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        #input-container.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+
+        /* Input bar styling with glassmorphism */
+        #input-bar {
+            background: rgba(33, 33, 33, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 16px 24px;
+            min-width: 400px;
+            max-width: 600px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
+                        inset 0 1px 0px rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+
+        #input-bar:hover {
+            border-color: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.5),
+                        inset 0 1px 0px rgba(255, 255, 255, 0.1);
+        }
+
+        #input-bar:focus-within {
+            border-color: rgba(79, 195, 247, 0.5);
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.5),
+                        inset 0 1px 0px rgba(255, 255, 255, 0.1),
+                        0 0 30px rgba(79, 195, 247, 0.2);
+        }
+
+        /* Input field */
+        #input-field {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 16px;
+            outline: none;
+            font-weight: 500;
+            caret-color: #4fc3f7;
+            letter-spacing: 0.3px;
+        }
+
+        #input-field::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+            transition: color 0.3s ease;
+        }
+
+        #input-field:focus::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Status indicator (connected/disconnected) */
+        #status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff5252;
+            box-shadow: 0 0 8px #ff5252;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        #status-indicator.connected {
+            background: #4caf50;
+            box-shadow: 0 0 12px #4caf50;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 12px #4caf50;
+            }
+            50% {
+                box-shadow: 0 0 20px #4caf50;
+            }
+        }
+
+        /* Help text */
+        #help-text {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            pointer-events: none;
+            transition: color 0.3s ease;
+            opacity: 0;
+            animation: fade-in-help 2s ease 0.5s forwards;
+        }
+
+        @keyframes fade-in-help {
+            to { opacity: 1; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+
+        #help-text:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Status bubble (executing, done, etc) */
+        #status-bubble {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(33, 33, 33, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 24px 32px;
+            color: white;
+            font-size: 18px;
+            font-weight: 500;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
+                        0 0 30px rgba(79, 195, 247, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 2000;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        #status-bubble.visible {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        /* Loading spinner for status bubble */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        /* Smooth scrolling and transitions */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Animations for element appearance */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            #input-bar {
+                min-width: 90vw;
+                max-width: 95vw;
+                padding: 14px 18px;
+            }
+
+            #input-field {
+                font-size: 14px;
+            }
+
+            #status-bubble {
+                max-width: 90vw;
+                font-size: 16px;
+                padding: 18px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Main canvas for drawing annotations -->
+    <canvas id="canvas"></canvas>
+
+    <!-- Input bar (bottom-center) -->
+    <div id="input-container">
+        <div id="input-bar">
+            <div id="status-indicator"></div>
+            <input
+                id="input-field"
+                type="text"
+                placeholder="What do you want to do? (Cmd+Shift+Space to hide)"
+                autocomplete="off"
+                spellcheck="false"
+            />
+        </div>
+    </div>
+
+    <!-- Status bubble (executing, done) -->
+    <div id="status-bubble"></div>
+
+    <!-- Help text -->
+    <div id="help-text">
+        Win+Shift+Space to toggle · Clevrr 100% Local AI
+    </div>
+
+    <!-- Renderer script -->
+    <script src="renderer.js"></script>
+</body>
+</html>

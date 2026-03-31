@@ -37,7 +37,7 @@ class OllamaClient:
         ollama_config = config.get("ollama", {})
         self.base_url: str = ollama_config.get("url", "http://localhost:11434")
         self.url: str = self.base_url
-        self.vision_model: str = ollama_config.get("vision_model", "llava")
+        self.vision_model: str = ollama_config.get("vision_model", "llava:latest")
         self.text_model: str = ollama_config.get("text_model", "llama3")
         self.code_model: str = ollama_config.get("code_model", "qwen2.5-coder:7b")
         self.timeout: int = ollama_config.get("timeout", 60)
@@ -185,41 +185,95 @@ class OllamaClient:
             Text response from the vision model.
         """
         try:
+            from PIL import Image
+            import io
+
             image_path = Path(screenshot_path)
             if not image_path.exists():
                 return f"Error: Screenshot not found at {screenshot_path}"
 
-            with open(image_path, "rb") as f:
-                image_b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            payload = {
-                "model": self.vision_model,
-                "prompt": question,
-                "images": [image_b64],
-                "stream": False,
-            }
+            # Progressive resize widths per retry
+            resize_widths = [1280, 1024, 768]
+            jpeg_qualities = [85, 75, 65]
 
             for attempt in range(1, self.max_retries + 1):
                 try:
-                    resp = requests.post(
-                        f"{self.base_url}/api/generate",
-                        json=payload,
-                        timeout=self.timeout,
+                    # Resize image
+                    img = Image.open(image_path)
+                    max_width = resize_widths[
+                        min(attempt - 1, len(resize_widths) - 1)
+                    ]
+                    quality = jpeg_qualities[
+                        min(attempt - 1, len(jpeg_qualities) - 1)
+                    ]
+
+                    if img.width > max_width:
+                        ratio = max_width / img.width
+                        new_size = (max_width, int(img.height * ratio))
+                        img = img.resize(new_size, Image.LANCZOS)
+
+                    buffer = io.BytesIO()
+                    img.save(
+                        buffer,
+                        format="JPEG",
+                        quality=quality,
+                        optimize=True,
                     )
+                    image_b64 = base64.b64encode(buffer.getvalue()).decode(
+                        "utf-8"
+                    )
+
+                    payload = {
+                        "model": self.vision_model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": question,
+                                "images": [image_b64],
+                            }
+                        ],
+                        "stream": False,
+                    }
+
+                    resp = requests.post(
+                        f"{self.base_url}/api/chat",
+                        json=payload,
+                        timeout=120,
+                    )
+
                     if resp.status_code == 200:
-                        return resp.json().get("response", "")
+                        return (
+                            resp.json()
+                            .get("message", {})
+                            .get("content", "")
+                        )
+
                     logger.warning(
-                        "Vision request attempt %d failed: HTTP %d",
+                        "Vision attempt %d failed: HTTP %d — %s",
                         attempt,
                         resp.status_code,
+                        resp.text[:200],
                     )
+
                 except requests.Timeout:
-                    logger.warning(
-                        "Vision request attempt %d timed out.", attempt
-                    )
+                    logger.warning("Vision attempt %d timed out.", attempt)
+                except Exception as exc:
+                    logger.warning("Vision attempt %d error: %s", attempt, exc)
 
                 if attempt < self.max_retries:
                     time.sleep(2)
+
+            # Fallback to llava if primary model failed
+            if self.vision_model != "llava:latest":
+                logger.warning(
+                    "Primary vision model %s failed. Falling back to llava:latest.",
+                    self.vision_model,
+                )
+                original_model = self.vision_model
+                self.vision_model = "llava:latest"
+                result = self.analyze_screen(screenshot_path, question)
+                self.vision_model = original_model
+                return result
 
             return "Error: Vision analysis failed after all retries."
 
