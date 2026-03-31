@@ -47,7 +47,10 @@ class VisionAgent:
         """
         self.ollama = ollama_client
         self.screen_capture = screen_capture
-        logger.info("VisionAgent initialized (local llava model).")
+        logger.info(
+            "VisionAgent initialized (local %s model).",
+            ollama_client.vision_model,
+        )
 
     # ------------------------------------------------------------------
     # Full Screen Analysis

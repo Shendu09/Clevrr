@@ -3,10 +3,10 @@
 
 ollama:
   url: "http://localhost:11434"
-  vision_model: "llava"
-  text_model: "llama3"
+  vision_model: "llava:latest"
+  text_model: "llama3:latest"
   code_model: "qwen2.5-coder:7b"
-  timeout: 120
+  timeout: 60
   max_retries: 3
 
 voice:
