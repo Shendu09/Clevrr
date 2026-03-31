@@ -41,6 +41,9 @@ class ScreenType(Enum):
     WORD = "word"
     EXCEL = "excel"
     SETTINGS = "settings"
+    WHATSAPP = "whatsapp"
+    WHATSAPP_CHAT = "whatsapp_chat"
+    WHATSAPP_CONTACT = "whatsapp_contact"
     
     # Unknown/Unrecognized
     UNKNOWN = "unknown"

@@ -572,7 +572,32 @@ class MemorySystem:
             if len(results) >= limit:
                 break
 
-        return [{"id": r[0], "text": r[1]} for r in results]
+        # Format results based on table type
+        formatted = []
+        for r in results:
+            if table == "episodes":
+                formatted.append(self._row_to_episode(r[:7]))
+            elif table == "procedures":
+                # r: id, goal_text, steps_json, success_rate, use_count, last_used, embedding, timestamp
+                formatted.append({
+                    "id": r[0],
+                    "goal": r[1],
+                    "steps": json.loads(r[2]) if r[2] else [],
+                    "success_rate": r[3] if len(r) > 3 else 0.0,
+                })
+            elif table == "knowledge":
+                # r: id, fact_text, category, confidence, embedding, timestamp
+                formatted.append({
+                    "id": r[0],
+                    "fact": r[1],
+                    "category": r[2] if len(r) > 2 else "",
+                    "confidence": r[3] if len(r) > 3 else 1.0,
+                })
+            else:
+                # Fallback for unknown tables
+                formatted.append({"id": r[0], "text": r[1]})
+        
+        return formatted
 
     @staticmethod
     def _row_to_episode(row: tuple) -> dict:

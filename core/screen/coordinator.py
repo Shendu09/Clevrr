@@ -52,11 +52,20 @@ class ScreenStateCoordinator:
         # Import subsystems
         from core.screen.screen_detector import ScreenDetector
         from core.screen.screen_router import ScreenRouter, ScreenRouterWithRetry
+        from core.screen.screen_handler import ScreenHandlerRegistry
         from core.screen.text_detector import TextDetector
         from core.screen.action_logger import ActionLogger
         from core.screen.screenshot_manager import ScreenshotCache
         from core.screen.keyboard_shortcuts import KeyboardShortcutsManager
         from core.screen.retry_recovery import RecoveryManager, RetryPolicy, TaskRetry
+        from core.screen.handlers import (
+            ChromeProfileHandler,
+            ChromeBrowserHandler,
+            GoogleHomepageHandler,
+            GoogleSearchResultsHandler,
+            DesktopHandler,
+        )
+        from core.screen.whatsapp_handler import WhatsAppHandler
         
         # Initialize detector
         self.detector = ScreenDetector(
@@ -64,16 +73,36 @@ class ScreenStateCoordinator:
         )
         logger.debug("ScreenDetector initialized")
         
-        # Initialize router with retry
+        # Initialize handler registry
+        self.handler_registry = ScreenHandlerRegistry()
+        logger.debug("ScreenHandlerRegistry initialized")
+        
+        # Create and register all handlers
+        handlers_to_register = [
+            ChromeProfileHandler(executor=self.executor, vision_agent=self.vision_agent),
+            ChromeBrowserHandler(executor=self.executor, vision_agent=self.vision_agent),
+            GoogleHomepageHandler(executor=self.executor, vision_agent=self.vision_agent),
+            GoogleSearchResultsHandler(executor=self.executor, vision_agent=self.vision_agent),
+            DesktopHandler(executor=self.executor, vision_agent=self.vision_agent),
+            WhatsAppHandler(executor=self.executor, vision_agent=self.vision_agent),
+        ]
+        
+        for handler in handlers_to_register:
+            self.handler_registry.register(handler)
+        logger.debug(f"Registered {len(handlers_to_register)} handlers")
+        
+        # Initialize router with handler registry
         if self.config.enable_vision_detection:
-            retry_policy = RetryPolicy(max_attempts=self.config.retry_max_attempts)
             self.router = ScreenRouterWithRetry(
                 detector=self.detector,
-                executor=self.executor,
-                retry_policy=retry_policy
+                handler_registry=self.handler_registry,
+                max_retries=self.config.retry_max_attempts
             )
         else:
-            self.router = ScreenRouter(detector=self.detector, executor=self.executor)
+            self.router = ScreenRouter(
+                detector=self.detector,
+                handler_registry=self.handler_registry
+            )
         logger.debug("ScreenRouter initialized")
         
         # Initialize text detector
@@ -171,10 +200,14 @@ class ScreenStateCoordinator:
             "failed_recoveries": self.recovery.get_failed_recoveries(),
         }
     
-    def register_handler(self, screen_type, handler):
-        """Register a screen handler."""
-        self.router.handlers.register(screen_type, handler)
-        logger.debug(f"Registered handler for {screen_type}")
+    def register_handler(self, handler):
+        """Register a screen handler.
+        
+        Args:
+            handler: ScreenHandler instance to register
+        """
+        self.handler_registry.register(handler)
+        logger.debug(f"Registered handler for {handler.SCREEN_TYPE}")
     
     def get_action_summary(self) -> Dict[str, Any]:
         """Get action summary."""

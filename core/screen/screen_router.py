@@ -31,6 +31,11 @@ class ScreenRouter:
         self.stuck_count = 0  # Counter for stuck state detection
         logger.info("ScreenRouter initialized")
     
+    @property
+    def handlers(self) -> ScreenHandlerRegistry:
+        """Get handlers registry (for backward compatibility)."""
+        return self.registry
+    
     def route_task(self, task: str, screenshot: Optional[bytes]) -> Dict[str, Any]:
         """Route task to appropriate handler.
         
