@@ -141,15 +141,17 @@ class Orchestrator:
                 memory_context.append(
                     {
                         "type": "procedure",
-                        "goal": procedure["goal"],
-                        "steps": procedure["steps"],
-                        "success_rate": procedure["success_rate"],
+                        "goal": procedure.get("goal", "Unknown goal"),
+                        "steps": procedure.get("steps", []),
+                        "success_rate": procedure.get("success_rate", 0.0),
                     }
                 )
-                logger.info(
-                    "Found matching procedure (success rate: %.0f%%)",
-                    procedure["success_rate"] * 100,
-                )
+                success_rate = procedure.get("success_rate", 0.0)
+                if success_rate > 0:
+                    logger.info(
+                        "Found matching procedure (success rate: %.0f%%)",
+                        success_rate * 100,
+                    )
 
             for ep in similar_episodes:
                 memory_context.append(

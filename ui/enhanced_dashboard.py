@@ -230,7 +230,6 @@ def create_dashboard_interface(
     
     with gr.Blocks(
         title="Clevrr Dashboard",
-        theme=gr.themes.Soft(primary_hue="blue"),
     ) as dashboard:
         gr.Markdown("# 🤖 CLEVRR SYSTEM DASHBOARD")
         gr.Markdown("Real-time monitoring of AI agent execution")
@@ -312,7 +311,6 @@ def create_dashboard_interface(
         dashboard.load(
             fn=refresh_status,
             outputs=[status_output, queue_output, agent_output, memory_output, event_output],
-            every=5,  # Auto-refresh every 5 seconds
         )
     
     return dashboard
@@ -348,6 +346,7 @@ def launch_dashboard(
     dashboard.launch(
         server_name="0.0.0.0",
         server_port=port,
+        theme=gr.themes.Soft(primary_hue="blue"),
         share=False,
         show_error=True,
     )
