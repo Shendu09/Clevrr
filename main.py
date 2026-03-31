@@ -465,12 +465,17 @@ def main() -> None:
             overlay_path = Path("ui/overlay")
             if (overlay_path / "node_modules").exists():
                 logger.info("Launching Electron...")
+                # Use shell=True on Windows for reliable npm execution
+                import sys as sys_module
+                npm_cmd = "npm.cmd start" if sys_module.platform.startswith('win') else "npm start"
                 subprocess.Popen(
-                    ["npm", "start"],
+                    npm_cmd,
                     cwd=str(overlay_path),
+                    shell=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
+                logger.info("Electron overlay launched on display :0 (Win32)")
             else:
                 logger.error(
                     "Electron dependencies not installed.\n"
