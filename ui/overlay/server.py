@@ -43,13 +43,12 @@ class OverlayServer:
         
         logger.info(f"[OVERLAY SERVER] Initialized on {host}:{port}")
 
-    async def handle_client(self, websocket, path):
+    async def handle_client(self, websocket):
         """
         Handle a new client connection.
 
         Args:
             websocket: WebSocket connection.
-            path: Connection path.
         """
         client_id = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
         self.clients.add(websocket)
