@@ -10,6 +10,8 @@ import base64
 import json
 import logging
 import time
+import hashlib
+import functools
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -43,13 +45,33 @@ class OllamaClient:
         self.timeout: int = ollama_config.get("timeout", 60)
         self.max_retries: int = ollama_config.get("max_retries", 3)
 
+        # Persistent session for connection reuse (HTTP keep-alive)
+        self.session = requests.Session()
+        self.session.headers.update({"Content-Type": "application/json"})
+
+        # In-memory prompt cache (avoids re-running identical LLM calls)
+        self._cache: Dict[str, str] = {}
+        self._cache_max = 128
+
         # Test connection on init
         if not self.test_connection():
             raise ConnectionError("Ollama connection failed. Start Ollama with: ollama serve")
 
+    def _cache_key(self, payload: dict) -> str:
+        """Generate stable hash for prompt + model (for caching).
+
+        Args:
+            payload: The request payload.
+
+        Returns:
+            16-character hex hash for cache lookup.
+        """
+        raw = json.dumps(payload, sort_keys=True)
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
     def test_connection(self):
         try:
-            response = requests.get(
+            response = self.session.get(
                 f"{self.base_url}/api/tags",
                 timeout=5,
             )
@@ -80,7 +102,7 @@ class OllamaClient:
             True if Ollama responds, False otherwise.
         """
         try:
-            resp = requests.get(self.base_url, timeout=5)
+            resp = self.session.get(self.base_url, timeout=5)
             return resp.status_code == 200
         except requests.ConnectionError:
             return False
@@ -98,7 +120,7 @@ class OllamaClient:
             True if the model exists locally.
         """
         try:
-            resp = requests.get(
+            resp = self.session.get(
                 f"{self.base_url}/api/tags",
                 timeout=10,
             )
@@ -132,7 +154,7 @@ class OllamaClient:
         )
 
         try:
-            resp = requests.post(
+            resp = self.session.post(
                 f"{self.base_url}/api/pull",
                 json={"name": model_name},
                 stream=True,
@@ -235,7 +257,7 @@ class OllamaClient:
                         "stream": False,
                     }
 
-                    resp = requests.post(
+                    resp = self.session.post(
                         f"{self.base_url}/api/chat",
                         json=payload,
                         timeout=120,
@@ -261,7 +283,7 @@ class OllamaClient:
                     logger.warning("Vision attempt %d error: %s", attempt, exc)
 
                 if attempt < self.max_retries:
-                    time.sleep(2)
+                    time.sleep(1)  # Reduced from 2 to 1 second (exponential backoff handled externally)
 
             # Fallback to llava if primary model failed
             if self.vision_model != "llava:latest":
@@ -279,6 +301,100 @@ class OllamaClient:
 
         except Exception as exc:
             logger.error("Error in analyze_screen: %s", exc)
+            return f"Error analyzing screen: {exc}"
+
+    def analyze_screen_bytes(self, image_bytes: bytes, question: str) -> str:
+        """Analyze a screenshot from bytes directly (no disk I/O).
+
+        This is faster than analyze_screen() for repeated calls since
+        it keeps images in memory instead of reading/writing disk.
+
+        Args:
+            image_bytes: PNG/JPEG image bytes.
+            question: Question to ask about the screenshot.
+
+        Returns:
+            Text response from the vision model.
+        """
+        try:
+            from PIL import Image
+            import io
+
+            # Progressive resize widths per retry
+            resize_widths = [1280, 1024, 768]
+            jpeg_qualities = [85, 75, 65]
+
+            for attempt in range(1, self.max_retries + 1):
+                try:
+                    # Load image from bytes
+                    img = Image.open(io.BytesIO(image_bytes))
+
+                    max_width = resize_widths[
+                        min(attempt - 1, len(resize_widths) - 1)
+                    ]
+                    quality = jpeg_qualities[
+                        min(attempt - 1, len(jpeg_qualities) - 1)
+                    ]
+
+                    if img.width > max_width:
+                        ratio = max_width / img.width
+                        new_size = (max_width, int(img.height * ratio))
+                        img = img.resize(new_size, Image.LANCZOS)
+
+                    buffer = io.BytesIO()
+                    img.save(
+                        buffer,
+                        format="JPEG",
+                        quality=quality,
+                        optimize=True,
+                    )
+                    image_b64 = base64.b64encode(buffer.getvalue()).decode(
+                        "utf-8"
+                    )
+
+                    payload = {
+                        "model": self.vision_model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": question,
+                                "images": [image_b64],
+                            }
+                        ],
+                        "stream": False,
+                    }
+
+                    resp = self.session.post(
+                        f"{self.base_url}/api/chat",
+                        json=payload,
+                        timeout=120,
+                    )
+
+                    if resp.status_code == 200:
+                        return (
+                            resp.json()
+                            .get("message", {})
+                            .get("content", "")
+                        )
+
+                    logger.warning(
+                        "Vision analysis attempt %d failed: HTTP %d",
+                        attempt,
+                        resp.status_code,
+                    )
+
+                except requests.Timeout:
+                    logger.warning("Vision analysis attempt %d timed out.", attempt)
+                except Exception as exc:
+                    logger.warning("Vision analysis attempt %d error: %s", attempt, exc)
+
+                if attempt < self.max_retries:
+                    time.sleep(1)
+
+            return "Error: Vision analysis failed after all retries."
+
+        except Exception as exc:
+            logger.error("Error in analyze_screen_bytes: %s", exc)
             return f"Error analyzing screen: {exc}"
 
     # ------------------------------------------------------------------
@@ -308,15 +424,29 @@ class OllamaClient:
         if system_prompt:
             payload["system"] = system_prompt
 
+        # Check cache first (for identical prompts)
+        cache_key = self._cache_key(payload)
+        if cache_key in self._cache:
+            logger.debug("[CACHE HIT] Reusing LLM response for prompt")
+            return self._cache[cache_key]
+
         for attempt in range(1, self.max_retries + 1):
             try:
-                resp = requests.post(
+                resp = self.session.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
                     timeout=self.timeout,
                 )
                 if resp.status_code == 200:
-                    return resp.json().get("response", "")
+                    result = resp.json().get("response", "")
+                    
+                    # Store in cache (with simple FIFO eviction)
+                    if len(self._cache) >= self._cache_max:
+                        oldest_key = next(iter(self._cache))
+                        del self._cache[oldest_key]
+                    self._cache[cache_key] = result
+                    
+                    return result
                 logger.warning(
                     "Generate attempt %d failed: HTTP %d",
                     attempt,
@@ -372,7 +502,7 @@ class OllamaClient:
         }
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
                 timeout=120,
@@ -470,7 +600,7 @@ class OllamaClient:
 
         start = time.time()
         try:
-            resp = requests.get(self.base_url, timeout=5)
+            resp = self.session.get(self.base_url, timeout=5)
             elapsed = (time.time() - start) * 1000
             report["connected"] = resp.status_code == 200
             report["response_time_ms"] = round(elapsed, 1)
@@ -479,7 +609,7 @@ class OllamaClient:
 
         # List available models
         try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            resp = self.session.get(f"{self.base_url}/api/tags", timeout=10)
             if resp.status_code == 200:
                 models = resp.json().get("models", [])
                 report["models"] = [
