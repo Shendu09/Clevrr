@@ -188,9 +188,17 @@ class Orchestrator:
             )
 
             if self.total_steps == 0:
-                result["outcome"] = "Planner could not create a valid plan."
-                self._finish_task(result, start_time)
-                return result
+                logger.info("Plan creation failed. Attempting single-step recovery...")
+                recovery = self.planner._create_single_step_recovery(task_text, screen_desc)
+                if recovery and recovery.get("steps"):
+                    plan = recovery
+                    self.total_steps = len(plan["steps"])
+                    result["total_steps"] = self.total_steps
+                    logger.info("Recovery successful: using single-step fallback plan")
+                else:
+                    result["outcome"] = "Planner could not create a valid plan."
+                    self._finish_task(result, start_time)
+                    return result
 
             # ── Step 4: Execute Each Step ─────────────────────────
             steps = plan.get("steps", [])

@@ -417,6 +417,8 @@ class PlannerAgent:
             return None
 
     @staticmethod
+    def _create_fallback_plan(task: str) -> dict:
+        """Create a very basic plan when LLM fails."""
         # Very basic plan when LLM fails
         return {
             "task": task,
