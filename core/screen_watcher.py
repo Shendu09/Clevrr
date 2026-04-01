@@ -18,6 +18,9 @@ from enum import Enum
 from dataclasses import dataclass
 import json
 
+import numpy as np
+import cv2
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,6 +49,10 @@ class ScreenObservation:
 class ScreenWatcher:
     """Monitor screen for changes and react."""
     
+    # Adaptive interval tuning
+    QUIET_THRESHOLD = 10   # Seconds of no change before slowing down
+    MAX_INTERVAL = 3.0     # Maximum seconds between checks in quiet mode
+    
     def __init__(self, check_interval: float = 1.0, similarity_threshold: float = 0.85):
         """
         Initialize screen watcher.
@@ -71,6 +78,7 @@ class ScreenWatcher:
         self.last_screenshot = None
         self.last_change_time = None
         self.consecutive_unchanges = 0
+        self.quiet_seconds = 0.0
     
     def start(self):
         """Start watching screen."""
@@ -94,63 +102,118 @@ class ScreenWatcher:
         logger.info("[ScreenWatcher] Stopped")
     
     def _watch_loop(self):
-        """Main watching loop."""
-        from utils.screen_capture import ScreenCapture
-        from utils.image_comparison import ImageComparator
-        
-        capture = ScreenCapture()
-        comparator = ImageComparator(similarity_threshold=self.similarity_threshold)
+        """Main watching loop with adaptive interval and downscaled comparison."""
+        quiet_seconds = 0.0
         
         while self.running:
             try:
-                # Capture current screen
-                current = capture.capture_screen()
+                # Capture at 25% resolution for fast diff
+                current = self._capture_downscaled()
                 
+                if current is None or current.size == 0:
+                    time.sleep(self.check_interval)
+                    continue
+                
+                # First capture - establish baseline
                 if self.last_screenshot is None:
                     self.last_screenshot = current
                     time.sleep(self.check_interval)
                     continue
                 
-                # Compare with last screenshot
-                comparison = comparator.compare(self.last_screenshot, current)
+                # Fast comparison on downscaled images
+                changed = self._has_changed(current)
                 
-                if comparison.is_different:
-                    self._on_screen_changed(comparison)
-                    self.last_change_time = time.time()
-                    self.consecutive_unchanges = 0
+                if changed:
+                    quiet_seconds = 0.0
+                    self._fire_event(ScreenEvent.CHANGE_DETECTED, ScreenObservation(
+                        event_type=ScreenEvent.CHANGE_DETECTED,
+                        description="Screen changed",
+                        confidence=1.0
+                    ))
+                    self._detect_patterns(current)
+                    logger.debug("[ScreenWatcher] Screen change detected")
                 else:
-                    self.consecutive_unchanges += 1
+                    quiet_seconds += self.check_interval
                 
-                self.last_screenshot = current
+                # Adaptive sleep: slow down during quiet periods
+                interval = min(
+                    self.check_interval * (1 + quiet_seconds / self.QUIET_THRESHOLD),
+                    self.MAX_INTERVAL,
+                )
+                time.sleep(interval)
                 
             except Exception as e:
-                logger.error(f"[ScreenWatcher] Watch loop error: {e}")
-            
-            time.sleep(self.check_interval)
+                logger.error("[ScreenWatcher] Watch loop error: %s", e)
+                time.sleep(self.check_interval)
     
-    def _on_screen_changed(self, comparison):
-        """Handle screen change."""
-        # Fire change event
-        self._fire_event(ScreenEvent.CHANGE_DETECTED, ScreenObservation(
-            event_type=ScreenEvent.CHANGE_DETECTED,
-            description="Screen changed",
-            changed_regions=comparison.changed_regions,
-            confidence=comparison.confidence
-        ))
+    def _capture_downscaled(self) -> Optional[np.ndarray]:
+        """Capture at 25% size for fast diff comparison.
         
-        # Detect specific patterns
-        self._detect_patterns(comparison)
+        Returns:
+            Numpy array of downscaled screenshot (or None on error).
+        """
+        try:
+            from mss import mss
+            
+            with mss() as sct:
+                shot = sct.grab(sct.monitors[1])
+                img = np.array(shot)
+                h, w = img.shape[:2]
+                # Resize to 25% for faster comparison
+                downscaled = cv2.resize(img, (w // 4, h // 4), interpolation=cv2.INTER_AREA)
+                return downscaled
+        except Exception as e:
+            logger.error("[ScreenWatcher] Failed to capture downscaled image: %s", e)
+            return None
     
-    def _detect_patterns(self, comparison):
-        """Detect known patterns from screenshot analysis."""
-        # This is where we'd use OCR, UI detection, etc.
-        # For now, basic implementation
+    def _has_changed(self, current: np.ndarray) -> bool:
+        """Check if screen has changed using downscaled image comparison.
+        
+        Args:
+            current: Current downscaled screenshot.
+            
+        Returns:
+            True if screen has changed beyond threshold.
+        """
+        if self.last_screenshot is None or self.last_screenshot.size == 0:
+            self.last_screenshot = current
+            return False
         
         try:
-            # Try to detect common patterns
-            # This would require OCR (pytesseract) or UI detection (similar)
+            # Compute mean absolute difference
+            diff = cv2.absdiff(self.last_screenshot, current)
+            mean_diff = diff.mean()
             
-            # Example: Detect error dialog
+            # If mean difference exceeds threshold, consider it changed
+            changed = mean_diff > (1.0 - self.similarity_threshold) * 255
+            
+            if changed:
+                self.last_screenshot = current.copy()
+            
+            return changed
+        except Exception as e:
+            logger.error("[ScreenWatcher] Comparison error: %s", e)
+            return False
+    
+    def _detect_patterns(self, current: np.ndarray):
+        """Detect known patterns from screenshot analysis.
+        
+        Args:
+            current: Current downscaled screenshot array.
+        """
+        # This is where we'd use OCR, UI detection, etc.
+        # For now, basic implementation for detecting common patterns
+        
+        try:
+            # Placeholder for pattern detection (OCR, UI detection, etc.)
+            # Future: Use pytesseract for OCR, or pywinauto for UI elements
+            
+            # Example: Could detect error dialogs, loading indicators, etc.
+            # For now, just log that a pattern detection was attempted
+            logger.debug("[ScreenWatcher] Pattern detection completed")
+            
+        except Exception as e:
+            logger.error("[ScreenWatcher] Pattern detection error: %s", e)
             if self._has_error_indicators(comparison):
                 self._fire_event(ScreenEvent.ERROR_POPUP, ScreenObservation(
                     event_type=ScreenEvent.ERROR_POPUP,
