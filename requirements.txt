@@ -14,6 +14,7 @@
 # Computer Control
 pyautogui>=0.9.54
 pywinauto; sys_platform == "win32"
+pygetwindow>=0.0.9; sys_platform == "win32"
 mss>=9.0.1
 opencv-python>=4.8.0
 uiautomation; sys_platform == "win32"
@@ -26,6 +27,7 @@ pytesseract>=0.3.10
 # Vision & AI
 Pillow>=10.0.0
 numpy>=1.24.0
+mediapipe>=0.10.0
 
 # Voice (Local)
 openai-whisper>=20231117
@@ -36,6 +38,7 @@ webrtcvad>=2.0.10
 openwakeword>=0.6.0
 soundfile>=0.12.1
 scipy>=1.11.0
+RealtimeSTT>=0.2.0
 
 # Memory & Semantic Search
 sentence-transformers>=2.3.0

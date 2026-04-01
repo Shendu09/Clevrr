@@ -273,6 +273,16 @@ class Orchestrator:
                     steps_completed += 1
                     logger.info("Step %d: PASSED ✓", step_num)
                     print(f"[VALIDATOR] Step {step_num} result: True")
+                    
+                    # GAP 3 FIX: Re-read screen after step to know current state
+                    fresh_screen = self.vision.analyze_screen()
+                    fresh_desc = fresh_screen.get("screen_description", "")
+                    logger.debug(
+                        "Step %d completed. Fresh screen state: %s",
+                        step_num,
+                        fresh_desc[:200] if fresh_desc else "unknown",
+                    )
+                    
                 else:
                     print(f"[VALIDATOR] Step {step_num} result: False")
                     # Try healing

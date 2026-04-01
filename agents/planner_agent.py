@@ -146,7 +146,14 @@ class PlannerAgent:
         except Exception as exc:
             logger.warning("Planner parse attempt 3 failed: %s", exc)
 
-        logger.error("All plan generation attempts failed. Using fallback plan.")
+        # GAP 4 FIX: Recovery with simpler single-step fallback
+        logger.info("Attempting single-step recovery plan...")
+        recovery_plan = self._create_single_step_recovery(task, screen_description)
+        if recovery_plan and recovery_plan.get("steps"):
+            logger.info("Recovery plan created with %d step(s)", len(recovery_plan["steps"]))
+            return recovery_plan
+
+        logger.error("All plan generation attempts failed. Using basic fallback plan.")
         return self.create_fallback_plan(task)
 
     # ------------------------------------------------------------------
@@ -340,8 +347,76 @@ class PlannerAgent:
         """Return a minimal fallback plan when planning fails."""
         return PlannerAgent.create_fallback_plan(task)
 
+    def _create_single_step_recovery(self, task: str, screen_description: str) -> dict:
+        """Create a single-step recovery plan when multi-step planning fails.
+
+        Uses a much simpler prompt to get one action from the LLM.
+
+        Args:
+            task: The user task.
+            screen_description: Current screen state.
+
+        Returns:
+            Plan with a single step, or None if recovery fails.
+        """
+        try:
+            recovery_prompt = (
+                f"Current screen: {screen_description}\n"
+                f"Task: {task}\n\n"
+                f"Generate ONE single next action to take.\n"
+                f"Format your response as:\n"
+                f"action_type|target|value\n\n"
+                f"Example: click|search button|null\n"
+                f"Example: type|search box|python tutorial\n"
+                f"Example: open_app|chrome|null\n\n"
+                f"Valid actions: click, type, press_key, open_app, wait, "
+                f"scroll_up, scroll_down, find_and_click, double_click, hotkey"
+            )
+
+            response = self.ollama.generate(recovery_prompt)
+            logger.debug("Recovery response: %s", response)
+
+            # Parse pipe-separated format: action_type|target|value
+            parts = response.strip().split("|")
+            if len(parts) < 2:
+                return None
+
+            action_type = parts[0].strip().lower()
+            target = parts[1].strip() if len(parts) > 1 else ""
+            value = parts[2].strip() if len(parts) > 2 else None
+
+            # Validate action type
+            valid_actions = {
+                "click", "type", "press_key", "open_app", "wait",
+                "scroll_up", "scroll_down", "find_and_click", "double_click",
+                "hotkey", "new_file", "save", "copy", "paste",
+            }
+            if action_type not in valid_actions:
+                logger.warning("Invalid action type in recovery: %s", action_type)
+                return None
+
+            step = {
+                "step_number": 1,
+                "action_type": action_type,
+                "description": f"{action_type} on {target}" if target else action_type,
+                "target": target,
+                "value": value if value != "null" else None,
+                "expected_outcome": "One step of task completed",
+                "timeout": 15,
+            }
+
+            return {
+                "task": task,
+                "total_steps": 1,
+                "steps": [step],
+                "recovery_mode": True,
+            }
+
+        except Exception as exc:
+            logger.warning("Single-step recovery failed: %s", exc)
+            return None
+
     @staticmethod
-    def create_fallback_plan(task: str) -> dict:
         # Very basic plan when LLM fails
         return {
             "task": task,
