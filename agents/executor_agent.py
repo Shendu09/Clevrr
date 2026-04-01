@@ -472,10 +472,22 @@ class ExecutorAgent:
         command = app_commands.get(app_name.lower(), app_name)
 
         try:
-            subprocess.Popen(command)
-            time.sleep(2)
-            logger.info("Opened app via command: %s", command)
-            return True
+            # Special handling for Chrome to bypass profile picker
+            if app_name.lower() == "chrome":
+                subprocess.Popen([
+                    "chrome.exe",
+                    "--profile-directory=Default",
+                    "--no-first-run",
+                    "--start-maximized"
+                ])
+                time.sleep(3)  # Give Chrome more time to load with profile
+                logger.info("Opened Chrome with Default profile (no picker)")
+                return True
+            else:
+                subprocess.Popen(command)
+                time.sleep(2)
+                logger.info("Opened app via command: %s", command)
+                return True
         except Exception:
             pass
 
