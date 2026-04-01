@@ -522,6 +522,14 @@ class ExecutorAgent:
             True if the element was found and clicked.
         """
         try:
+            # Shortcut for Chrome address bar — skip vision and use keyboard
+            desc_lower = description.lower()
+            if any(term in desc_lower for term in ["address bar", "url bar", "omnibox"]):
+                logger.info("Found address bar reference, using Ctrl+L shortcut")
+                pyautogui.hotkey("ctrl", "l")
+                time.sleep(0.5)
+                return True
+            
             location = self.vision.find_element(description)
             if location:
                 return self.click(location[0], location[1])
