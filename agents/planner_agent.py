@@ -35,7 +35,14 @@ class PlannerAgent:
         "save, save_and_close, minimize, maximize, "
         "find_and_click, wait, hotkey, select_all, "
         "copy, paste, undo, new_file. "
-        "Never invent new action types not in this list."
+        "Never invent new action types not in this list. "
+        "When opening Chrome to search: ALWAYS use exactly these 5 steps in order: "
+        "1) open_app chrome, "
+        "2) wait 2 seconds, "
+        "3) find_and_click address bar, "
+        "4) type the search query, "
+        "5) press_key enter. "
+        "Never put a type step directly after open_app without waiting first."
     )
 
     def __init__(
