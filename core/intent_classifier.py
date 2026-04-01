@@ -21,10 +21,14 @@ Intent Types:
 """
 
 import re
+import functools
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class IntentType(Enum):
@@ -115,6 +119,55 @@ class IntentClassifier:
     }
     
     URL_PATTERNS = r'^(https?://|www\.|\.com|\.org|\.net|\.io)'
+
+    def __init__(self):
+        """Initialize classifier with pre-compiled regex patterns."""
+        # Compile all app patterns once for fast matching
+        self._app_patterns_compiled = {
+            re.compile(pattern, re.IGNORECASE): app_name
+            for pattern, app_name in self.APP_PATTERNS.items()
+        }
+        
+        # Compile URL pattern once
+        self._url_pattern_compiled = re.compile(self.URL_PATTERNS, re.IGNORECASE)
+    
+    @functools.lru_cache(maxsize=64)
+    def classify_cached(self, command: str) -> tuple:
+        """LRU-cached version of classify. Returns serialized tuple for hashability.
+        
+        Args:
+            command: User's natural language command (normalized/lowercase in caller)
+            
+        Returns:
+            Tuple of (intent_value, confidence, parameters_json, reasoning)
+        """
+        result = self.classify(command)
+        return (
+            result.intent.value,
+            result.confidence,
+            json.dumps(result.parameters),
+            result.reasoning,
+        )
+    
+    def classify_with_cache(self, command: str) -> IntentResult:
+        """Wrapper that uses LRU cache for repeated commands.
+        
+        Args:
+            command: User's natural language command
+            
+        Returns:
+            IntentResult with classified intent and parameters
+        """
+        # Normalize for caching
+        normalized = command.lower().strip()
+        intent_val, confidence, params_json, reasoning = self.classify_cached(normalized)
+        
+        return IntentResult(
+            intent=IntentType(intent_val),
+            confidence=confidence,
+            parameters=json.loads(params_json),
+            reasoning=reasoning,
+        )
     
     def classify(self, command: str) -> IntentResult:
         """
@@ -173,8 +226,8 @@ class IntentClassifier:
     
     def _try_url_intent(self, command: str) -> IntentResult:
         """Try to identify URL intent"""
-        # Check for direct URL
-        if re.search(self.URL_PATTERNS, command):
+        # Check for direct URL using compiled pattern
+        if self._url_pattern_compiled.search(command):
             url = self._extract_url(command)
             if url:
                 return IntentResult(
@@ -382,13 +435,13 @@ class IntentClassifier:
     # Helper methods
     
     def _match_app_name(self, app_text: str) -> Optional[str]:
-        """Match user input to known app names"""
+        """Match user input to known app names using precompiled patterns."""
         app_text_lower = app_text.lower()
         
-        for patterns, app_name in self.APP_PATTERNS.items():
-            for pattern in patterns.split('|'):
-                if pattern.strip() in app_text_lower:
-                    return app_name
+        # Use precompiled regex patterns for faster matching
+        for pattern, app_name in self._app_patterns_compiled.items():
+            if pattern.search(app_text_lower):
+                return app_name
         
         return None
     

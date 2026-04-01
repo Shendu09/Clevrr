@@ -8,6 +8,7 @@ ZERO external APIs — all diagnosis runs through local LLM.
 
 import logging
 import time
+import random
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -27,6 +28,44 @@ FAILURE_TYPES = [
     "network_error",
     "unknown",
 ]
+
+
+def retry_with_backoff(func, max_attempts: int = 3, base_delay: float = 1.0):
+    """Retry function with exponential backoff + jitter.
+    
+    Uses exponential backoff (base_delay * 2^attempt) with random jitter
+    to avoid thundering herd problems. When Ollama is overloaded, this
+    gives it time to recover gracefully.
+    
+    Args:
+        func: Callable that may raise an exception.
+        max_attempts: Maximum number of attempts (default 3).
+        base_delay: Base delay in seconds (default 1.0).
+        
+    Returns:
+        Result from func() on success.
+        
+    Raises:
+        Final exception if all attempts fail.
+    """
+    for attempt in range(max_attempts):
+        try:
+            return func()
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                raise
+            
+            # Exponential backoff: 1s, 2s, 4s (base_delay=1.0)
+            # + jitter (0-0.5s) to avoid synchronized retries
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+            logger.warning(
+                "[RETRY] Attempt %d/%d failed: %s. Waiting %.2fs before retry.",
+                attempt + 1,
+                max_attempts,
+                type(e).__name__,
+                delay
+            )
+            time.sleep(delay)
 
 
 class SelfHealer:
@@ -204,7 +243,9 @@ class SelfHealer:
 
             else:
                 logger.warning("Unknown failure type. Retrying after delay.")
-                time.sleep(2)
+                # Use exponential backoff for unknown failures
+                delay = 1.0 * (2 ** (attempt - 1)) + random.uniform(0, 0.5)
+                time.sleep(delay)
                 healed = self.heal(failed_step, error, attempt + 1)
 
         except Exception as exc:
@@ -251,9 +292,15 @@ class SelfHealer:
         return False
 
     def _heal_wrong_timing(self, step: dict) -> bool:
-        """Wait and retry for timing issues."""
-        logger.info("Healing wrong_timing: waiting 2 seconds before retry.")
-        time.sleep(2)
+        """Wait and retry for timing issues with adaptive backoff.
+        
+        Timing issues often indicate race conditions where operations
+        are happening too fast. Use adaptive delay with jitter.
+        """
+        # Adaptive delay: 1.0s + random jitter (0-1.0s)
+        delay = 1.0 + random.uniform(0, 1.0)
+        logger.info("Healing wrong_timing: waiting %.2f seconds before retry.", delay)
+        time.sleep(delay)
         return True  # Signal to retry the step
 
     def _heal_app_crashed(self, step: dict) -> bool:

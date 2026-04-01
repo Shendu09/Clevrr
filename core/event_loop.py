@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Event:
-    """System event for event loop processing."""
+    """System event for event loop processing.
+    
+    Uses __slots__ for faster attribute access on hot path.
+    """
+    __slots__ = ('type', 'source', 'data', 'timestamp', 'priority')
+    
     type: str  # "task", "screenshot", "voice", "memory", "alarm"
     source: str  # "voice", "overlay", "watcher", "memory", "scheduler"
     data: Dict[str, Any]

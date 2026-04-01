@@ -11,51 +11,56 @@
 # Ollama provides the local LLM runtime for vision (llava) and
 # text reasoning (llama3). It runs as a system service on localhost:11434.
 
-# --- Computer Control ---
-pyautogui                          # Mouse + keyboard automation
-pywinauto; sys_platform == "win32" # Semantic UI element finding (Windows only)
-mss                                # Multi-monitor screen capture
-opencv-python                      # Image processing and comparison
-uiautomation; sys_platform == "win32"  # Windows UI Automation (Windows only)
-pyperclip                          # Clipboard access for text pasting
+# Computer Control
+pyautogui>=0.9.54
+pywinauto; sys_platform == "win32"
+mss>=9.0.1
+opencv-python>=4.8.0
+uiautomation; sys_platform == "win32"
+pyperclip>=1.8.2
 
-# --- App Control ---
-playwright                         # Browser automation (all platforms)
-pytesseract                        # OCR support (optional, for advanced vision)
+# Browser
+playwright>=1.40.0
+pytesseract>=0.3.10
 
-# --- Local AI (Voice) ---
-openai-whisper                     # Offline speech-to-text (runs locally)
-faster-whisper                     # Faster local transcription backend
-pyttsx3                            # Offline text-to-speech (runs locally)
-sounddevice                        # Microphone audio recording
-webrtcvad                          # Voice activity detection
-openwakeword                       # Wake-word detection backend
-soundfile                          # Audio file handling
-scipy                              # Signal processing utilities
+# Vision & AI
+Pillow>=10.0.0
+numpy>=1.24.0
 
-# --- Local AI (Memory & Search) ---
-sentence-transformers              # Local semantic search embeddings
+# Voice (Local)
+openai-whisper>=20231117
+faster-whisper>=0.10.0
+pyttsx3>=2.90
+sounddevice>=0.4.6
+webrtcvad>=2.0.10
+openwakeword>=0.6.0
+soundfile>=0.12.1
+scipy>=1.11.0
 
-# --- UI & Config ---
-gradio                             # Local web dashboard (localhost:7860)
-pyyaml                             # YAML config file parsing
-Pillow                             # Image handling
-numpy                              # Array/numerical processing
-psutil                             # System health/process metrics
-python-dotenv                      # Environment variable management
+# Memory & Semantic Search
+sentence-transformers>=2.3.0
 
-# --- HTTP (local only, for Ollama communication) ---
-requests                           # HTTP client for local Ollama API
-msgpack>=1.0
-pytest>=7.0.0
-pytest-timeout>=2.1.0
-auth0-python>=4.7.0
-python-dotenv>=1.0.0
+# LLM Communication
 requests>=2.31.0
+msgpack>=1.0.0
+
+# Config & Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+psutil>=5.9.0
+
+# Dashboard
+gradio>=4.0.0
 flask>=3.0.0
+
+# LangChain / Agents
 langchain>=0.3.0
 langgraph>=0.4.0
 langchain-openai>=0.6.0
-pyautogui>=0.9.54
-mss>=9.0.1
-Pillow>=10.0.0
+
+# Auth
+auth0-python>=4.7.0
+
+# Testing
+pytest>=7.0.0
+pytest-timeout>=2.1.0
