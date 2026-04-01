@@ -6,11 +6,13 @@ Supports coordinate grids for AI-guided clicking.
 All processing runs locally with OpenCV.
 """
 
+import base64
 import logging
 import os
 import string
 import time
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -82,6 +84,36 @@ class ScreenCapture:
 
         except Exception as exc:
             logger.error("Failed to capture primary monitor: %s", exc)
+            return ""
+
+    def capture_to_bytes(self) -> bytes:
+        """Capture primary monitor and return PNG bytes (never writes to disk).
+
+        Returns:
+            PNG image data as bytes.
+        """
+        try:
+            with mss() as sct:
+                monitor = sct.monitors[1]
+                shot = sct.grab(monitor)
+                img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                buf = BytesIO()
+                img.save(buf, format="PNG", optimize=True)
+                return buf.getvalue()
+        except Exception as exc:
+            logger.error("Failed to capture to bytes: %s", exc)
+            return b""
+
+    def capture_to_base64(self) -> str:
+        """Capture and return base64 string ready for Ollama vision calls.
+
+        Returns:
+            Base64-encoded PNG image string.
+        """
+        try:
+            return base64.b64encode(self.capture_to_bytes()).decode()
+        except Exception as exc:
+            logger.error("Failed to capture to base64: %s", exc)
             return ""
 
     def capture_all_monitors(self) -> List[str]:
