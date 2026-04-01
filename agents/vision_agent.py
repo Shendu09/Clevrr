@@ -63,7 +63,7 @@ class VisionAgent:
             Dictionary with structured screen information including
             active app, visible elements, text, and description.
         """
-        screenshot_path = self.screen_capture.capture_primary()
+        screenshot_path = self.screen_capture.capture_active_window()
         if not screenshot_path:
             return self._empty_analysis("Screenshot capture failed")
 
@@ -121,16 +121,16 @@ class VisionAgent:
         """Find a UI element on screen by description.
 
         Uses the local llava model to locate the element and returns
-        its pixel coordinates.
+        its pixel coordinates via bounding box detection.
 
         Args:
             description: Text description of the element to find
                          (e.g. "the Submit button", "search bar").
 
         Returns:
-            Tuple of (x, y) pixel coordinates, or None if not found.
+            Tuple of (x, y) pixel coordinates (center of element), or None if not found.
         """
-        screenshot_path = self.screen_capture.capture_primary()
+        screenshot_path = self.screen_capture.capture_active_window()
         if not screenshot_path:
             return None
 
@@ -138,66 +138,67 @@ class VisionAgent:
             question = (
                 f"I need to find: '{description}'\n\n"
                 f"Look at this screenshot and tell me where this element is.\n"
-                f"Give me the approximate position as a percentage of the "
-                f"screen width and height.\n\n"
-                f"Respond ONLY in JSON:\n"
-                f'{{"found": true, "x_percent": 0.5, "y_percent": 0.3, '
-                f'"confidence": 0.8}}\n\n'
+                f"Return a bounding box for the element as [ymin, xmin, ymax, xmax] "
+                f"where all values are between 0 and 1000 representing position on screen.\n\n"
+                f"Respond ONLY in this format, no other text:\n"
+                f"[ymin, xmin, ymax, xmax]\n\n"
+                f"Example: [250, 400, 350, 500]\n\n"
                 f"If you cannot find it, respond:\n"
-                f'{{"found": false, "x_percent": 0, "y_percent": 0, '
-                f'"confidence": 0}}'
+                f"[0, 0, 0, 0]"
             )
 
             result = self.ollama.analyze_screen(screenshot_path, question)
 
-            # Try to parse as JSON
+            # Parse bounding box response
             import json
 
-            # Clean up the response
             cleaned = result.strip()
-            if "```" in cleaned:
-                lines = cleaned.split("\n")
-                lines = [l for l in lines if not l.strip().startswith("```")]
-                cleaned = "\n".join(lines)
-
+            
+            # Try to extract the array from the response
             try:
-                data = json.loads(cleaned)
-            except json.JSONDecodeError:
-                # Try to extract JSON from the response
-                start = cleaned.find("{")
-                end = cleaned.rfind("}") + 1
+                # Look for square brackets
+                start = cleaned.find("[")
+                end = cleaned.rfind("]") + 1
                 if start >= 0 and end > start:
-                    data = json.loads(cleaned[start:end])
-                else:
-                    logger.warning("Could not parse element location response.")
-                    return None
-
-            if not data.get("found", False):
-                logger.info("Element '%s' not found on screen.", description)
-                return None
-
-            x_pct = float(data.get("x_percent", 0))
-            y_pct = float(data.get("y_percent", 0))
-
-            # Convert percentages to pixels
-            screen_w, screen_h = self.screen_capture.get_screen_resolution()
-            x = int(x_pct * screen_w)
-            y = int(y_pct * screen_h)
-
-            # Sanity check
-            if 0 <= x <= screen_w and 0 <= y <= screen_h:
-                logger.info(
-                    "Found '%s' at (%d, %d) [%.1f%%, %.1f%%]",
-                    description,
-                    x,
-                    y,
-                    x_pct * 100,
-                    y_pct * 100,
-                )
-                return (x, y)
-            else:
-                logger.warning(
-                    "Element coordinates out of bounds: (%d, %d)", x, y
+                    bbox_str = cleaned[start:end]
+                    bbox_list = json.loads(bbox_str)
+                    
+                    if not isinstance(bbox_list, list) or len(bbox_list) != 4:
+                        logger.warning("Invalid bounding box format: %s", bbox_str)
+                        return None
+                    
+                    ymin, xmin, ymax, xmax = [float(x) for x in bbox_list]
+                    
+                    # Check if empty box (element not found)
+                    if ymin == 0 and xmin == 0 and ymax == 0 and xmax == 0:
+                        logger.info("Element '%s' not found on screen.", description)
+                        return None
+                    
+                    # Calculate center point
+                    center_x = ((xmin + xmax) / 2 / 1000) * self.screen_capture.get_screen_resolution()[0]
+                    center_y = ((ymin + ymax) / 2 / 1000) * self.screen_capture.get_screen_resolution()[1]
+                    
+                    x = int(center_x)
+                    y = int(center_y)
+                    
+                    screen_w, screen_h = self.screen_capture.get_screen_resolution()
+                    
+                    # Sanity check
+                    if 0 <= x <= screen_w and 0 <= y <= screen_h:
+                        logger.info(
+                            "Found '%s' at (%d, %d) [bbox: %.0f-%.0f x %.0f-%.0f]",
+                            description,
+                            x,
+                            y,
+                            xmin / 10,
+                            xmax / 10,
+                            ymin / 10,
+                            ymax / 10,
+                        )
+                        return (x, y)
+                    else:
+                        logger.warning(
+                            "Element coordinates out of bounds: (%d, %d)", x, y
                 )
                 return None
 
@@ -215,7 +216,7 @@ class VisionAgent:
         Returns:
             Dictionary with popup information, or None if no popup found.
         """
-        screenshot_path = self.screen_capture.capture_primary()
+        screenshot_path = self.screen_capture.capture_active_window()
         if not screenshot_path:
             return None
 
@@ -272,7 +273,7 @@ class VisionAgent:
         Returns:
             Dictionary with error information, or None if no error found.
         """
-        screenshot_path = self.screen_capture.capture_primary()
+        screenshot_path = self.screen_capture.capture_active_window()
         if not screenshot_path:
             return None
 
