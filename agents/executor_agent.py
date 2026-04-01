@@ -351,6 +351,10 @@ class ExecutorAgent:
         if not text:
             return False
         try:
+            # Dismiss any overlays (Windows Search, profile picker, etc.)
+            pyautogui.press("escape")
+            time.sleep(0.4)
+            
             time.sleep(0.5)
             pyautogui.write(text, interval=0.05)
             logger.info("Typed: '%s'", text[:50])
@@ -472,10 +476,22 @@ class ExecutorAgent:
         command = app_commands.get(app_name.lower(), app_name)
 
         try:
-            subprocess.Popen(command)
-            time.sleep(2)
-            logger.info("Opened app via command: %s", command)
-            return True
+            # Special handling for Chrome to bypass profile picker
+            if app_name.lower() == "chrome":
+                subprocess.Popen([
+                    "chrome.exe",
+                    "--profile-directory=Default",
+                    "--no-first-run",
+                    "--start-maximized"
+                ])
+                time.sleep(3)  # Give Chrome more time to load with profile
+                logger.info("Opened Chrome with Default profile (no picker)")
+                return True
+            else:
+                subprocess.Popen(command)
+                time.sleep(2)
+                logger.info("Opened app via command: %s", command)
+                return True
         except Exception:
             pass
 
@@ -506,6 +522,14 @@ class ExecutorAgent:
             True if the element was found and clicked.
         """
         try:
+            # Shortcut for Chrome address bar — skip vision and use keyboard
+            desc_lower = description.lower()
+            if any(term in desc_lower for term in ["address bar", "url bar", "omnibox"]):
+                logger.info("Found address bar reference, using Ctrl+L shortcut")
+                pyautogui.hotkey("ctrl", "l")
+                time.sleep(0.5)
+                return True
+            
             location = self.vision.find_element(description)
             if location:
                 return self.click(location[0], location[1])
