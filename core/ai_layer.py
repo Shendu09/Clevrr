@@ -1,5 +1,6 @@
 from agents.orchestrator import Orchestrator
-import threading
+import atexit
+from concurrent.futures import ThreadPoolExecutor
 from os_control.app_launcher import AppLauncher
 from os_control.file_manager import FileManager
 from os_control.process_manager import ProcessManager
@@ -16,6 +17,9 @@ from agents.competitive_programmer import CompetitiveProgrammer
 from utils.safety_guard import SafetyGuard
 from utils.screen_capture import ScreenCapture
 from utils.voice_controller import VoiceController
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class _OverlayProxy:
@@ -58,6 +62,10 @@ class AILayer:
 
         self.universal_controller = UniversalController(self.ollama)
 
+        # Background task executor (replaces daemon threads for debuggability)
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="clevrr")
+        atexit.register(self._executor.shutdown, wait=False)
+
         self.completed_tasks = 0
         self.successful_tasks = 0
 
@@ -84,17 +92,24 @@ class AILayer:
                 },
             )
 
-        threading.Thread(
-            target=self.instincts.extract_instinct,
-            args=(task, plan, success),
-            daemon=True,
-        ).start()
+        # Fire-and-forget background tasks with proper exception handling
+        self._executor.submit(self._run_instinct_extract, task, plan, success)
+        self._executor.submit(self._maybe_compact_memory)
 
-        def _compact_if_needed():
+    def _run_instinct_extract(self, task: str, plan: dict, success: bool):
+        """Extract instinct from completed task (background task)."""
+        try:
+            self.instincts.extract_instinct(task, plan, success)
+        except Exception as e:
+            logger.error("[INSTINCT] Failed to extract instinct: %s", e)
+
+    def _maybe_compact_memory(self):
+        """Compact memory if needed (background task)."""
+        try:
             if self.memory_optimizer.should_compact():
                 self.memory_optimizer.compact_memory()
-
-        threading.Thread(target=_compact_if_needed, daemon=True).start()
+        except Exception as e:
+            logger.error("[MEMORY] Compaction failed: %s", e)
 
     def _build_plan_snapshot(self) -> dict:
         try:
