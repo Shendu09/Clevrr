@@ -1,0 +1,34 @@
+[
+  {
+    "user_id": "alice",
+    "username": "Alice Admin",
+    "role": "ADMIN",
+    "created_at": 1775051975.1609645,
+    "active": true,
+    "allowed_paths": []
+  },
+  {
+    "user_id": "bob",
+    "username": "Bob User",
+    "role": "USER",
+    "created_at": 1775051975.1609645,
+    "active": true,
+    "allowed_paths": []
+  },
+  {
+    "user_id": "carol",
+    "username": "Carol Guest",
+    "role": "GUEST",
+    "created_at": 1775051975.1609645,
+    "active": true,
+    "allowed_paths": []
+  },
+  {
+    "user_id": "dave",
+    "username": "Dave Restricted",
+    "role": "RESTRICTED",
+    "created_at": 1775051975.1609645,
+    "active": true,
+    "allowed_paths": []
+  }
+]
