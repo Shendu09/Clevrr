@@ -351,6 +351,10 @@ class ExecutorAgent:
         if not text:
             return False
         try:
+            # Dismiss any overlays (Windows Search, profile picker, etc.)
+            pyautogui.press("escape")
+            time.sleep(0.4)
+            
             time.sleep(0.5)
             pyautogui.write(text, interval=0.05)
             logger.info("Typed: '%s'", text[:50])
