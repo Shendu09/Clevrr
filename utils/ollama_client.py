@@ -405,12 +405,14 @@ class OllamaClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
+        max_tokens: int = 256,
     ) -> str:
         """Generate text using the local llama3 model.
 
         Args:
             prompt: The user prompt to send.
             system_prompt: Optional system-level instruction.
+            max_tokens: Limit response length (default 256 for speed).
 
         Returns:
             Generated text response.
@@ -419,6 +421,7 @@ class OllamaClient:
             "model": self.text_model,
             "prompt": prompt,
             "stream": False,
+            "options": {"num_predict": max_tokens},
         }
 
         if system_prompt:

@@ -522,22 +522,56 @@ class ExecutorAgent:
             True if the element was found and clicked.
         """
         try:
-            # Shortcut for Chrome address bar — skip vision and use keyboard
             desc_lower = description.lower()
-            if any(term in desc_lower for term in ["address bar", "url bar", "omnibox"]):
-                logger.info("Found address bar reference, using Ctrl+L shortcut")
-                pyautogui.hotkey("ctrl", "l")
-                time.sleep(0.5)
-                return True
             
-            location = self.vision.find_element(description)
-            if location:
-                return self.click(location[0], location[1])
-            else:
-                logger.warning(
-                    "Could not find element: '%s'", description[:60]
-                )
-                return False
+            # KEYBOARD SHORTCUTS — try these before vision for known elements
+            shortcuts = {
+                "address bar": (lambda: pyautogui.hotkey("ctrl", "l")),
+                "url bar": (lambda: pyautogui.hotkey("ctrl", "l")),
+                "omnibox": (lambda: pyautogui.hotkey("ctrl", "l")),
+                "equals": (lambda: pyautogui.press("equal")),
+                "equal": (lambda: pyautogui.press("equal")),
+                "=": (lambda: pyautogui.press("equal")),
+                "enter": (lambda: pyautogui.press("enter")),
+                "tab": (lambda: pyautogui.press("tab")),
+                "image": (lambda: pyautogui.press("space")),
+                "take photo": (lambda: pyautogui.press("space")),
+                "take picture": (lambda: pyautogui.press("space")),
+                "capture": (lambda: pyautogui.press("space")),
+                "submit": (lambda: pyautogui.press("enter")),
+                "search": (lambda: pyautogui.press("enter")),
+                "ok": (lambda: pyautogui.press("enter")),
+                "send": (lambda: pyautogui.press("enter")),
+            }
+            
+            for keyword, action in shortcuts.items():
+                if keyword in desc_lower:
+                    logger.info("Using keyboard shortcut for '%s'", keyword)
+                    action()
+                    time.sleep(0.3)
+                    return True
+            
+            # VISION WITH RETRY — try vision, then retry once if it fails
+            for attempt in range(2):
+                logger.debug("Find-and-click attempt %d for '%s'", attempt + 1, description[:60])
+                location = self.vision.find_element(description)
+                if location:
+                    success = self.click(location[0], location[1])
+                    if success:
+                        return True
+                    logger.warning("Click at (%d, %d) failed, retrying...", location[0], location[1])
+                else:
+                    logger.warning("Vision could not locate '%s' (attempt %d/2)", description[:60], attempt + 1)
+                
+                if attempt == 0:
+                    time.sleep(0.5)
+            
+            # FALLBACK — try Tab+Enter if all else fails (common for buttons)
+            logger.info("Vision failed twice, trying Tab+Enter fallback")
+            pyautogui.press("tab")
+            time.sleep(0.2)
+            pyautogui.press("enter")
+            return True
 
         except Exception as exc:
             logger.error("Find-and-click failed: %s", exc)

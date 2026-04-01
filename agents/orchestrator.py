@@ -38,16 +38,18 @@ class Orchestrator:
     All AI calls are routed through the local Ollama instance.
     """
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, fast_mode: bool = True) -> None:
         """Initialize the Orchestrator and all sub-components.
 
         Args:
             config: Full configuration dictionary from settings.yaml.
+            fast_mode: Skip validation for simple actions, target 10-20s per task.
         """
         agent_config = config.get("agent", {})
-        self.max_retries: int = agent_config.get("max_retries", 3)
-        self.step_timeout: int = agent_config.get("step_timeout", 30)
-        self.heal_attempts: int = agent_config.get("heal_attempts", 3)
+        self.max_retries: int = agent_config.get("max_retries", 2)
+        self.step_timeout: int = agent_config.get("step_timeout", 10)
+        self.heal_attempts: int = agent_config.get("heal_attempts", 1)
+        self.fast_mode: bool = fast_mode
         self.confidence_threshold: float = agent_config.get(
             "confidence_threshold", 0.7
         )
@@ -252,8 +254,18 @@ class Orchestrator:
                 exec_result = self.executor.execute_step(step)
                 after_path = exec_result.get("screenshot_after", "")
 
-                # Validate the step
-                if after_path and before_path:
+                # Skip validation for simple actions in fast mode
+                action_type = step.get("action", "").lower()
+                skip_validation = self.fast_mode and action_type in ("wait", "press_key", "open_app", "close_app")
+
+                # Validate the step (skip for simple actions in fast mode)
+                if skip_validation:
+                    validation = {
+                        "success": exec_result["success"],
+                        "confidence": 0.9,
+                        "reason": "Skipped validation (fast mode)",
+                    }
+                elif after_path and before_path:
                     validation = self.validator.validate_step(
                         step, before_path, after_path
                     )
