@@ -6,8 +6,8 @@ ollama:
   vision_model: "llava:latest"
   text_model: "llama3:latest"
   code_model: "qwen2.5-coder:7b"
-  timeout: 60
-  max_retries: 3
+  timeout: 25
+  max_retries: 2
 
 voice:
   enabled: true
@@ -34,9 +34,9 @@ memory:
   cleanup_days: 30
 
 agent:
-  max_retries: 3
-  step_timeout: 30
-  heal_attempts: 3
+  max_retries: 2
+  step_timeout: 10
+  heal_attempts: 1
   confidence_threshold: 0.7
 
 ui:

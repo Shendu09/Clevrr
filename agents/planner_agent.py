@@ -36,6 +36,10 @@ class PlannerAgent:
         "find_and_click, wait, hotkey, select_all, "
         "copy, paste, undo, new_file. "
         "Never invent new action types not in this list. "
+        "CRITICAL: ALWAYS COMPLETE THE TASK. Do NOT stop after opening an app. "
+        "Every task MUST end with a result-producing action like: click equals, take photo, press enter. "
+        "For calculator tasks: 1) open_app calculator, 2) wait 1, 3) type numbers, 4) find_and_click equals. "
+        "For camera tasks: 1) open_app camera, 2) wait 2, 3) find_and_click take photo. "
         "When opening Chrome to search: ALWAYS use exactly these 5 steps in order: "
         "1) open_app chrome, "
         "2) wait 2 seconds, "
@@ -91,6 +95,7 @@ class PlannerAgent:
             raw_response = self.ollama.generate(
                 prompt,
                 system_prompt=self.SYSTEM_PROMPT,
+                max_tokens=2048,
             )
             logger.info("Raw llama3 response: %s", raw_response)
             parsed = json.loads(raw_response)
@@ -106,6 +111,7 @@ class PlannerAgent:
             raw_response = self.ollama.generate(
                 prompt,
                 system_prompt=self.SYSTEM_PROMPT,
+                max_tokens=2048,
             )
             logger.info("Raw llama3 response: %s", raw_response)
             start = raw_response.index("{")
