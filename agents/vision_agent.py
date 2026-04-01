@@ -199,7 +199,10 @@ class VisionAgent:
                     else:
                         logger.warning(
                             "Element coordinates out of bounds: (%d, %d)", x, y
-                )
+                        )
+                return None
+            except (json.JSONDecodeError, ValueError) as parse_err:
+                logger.warning("Failed to parse bounding box: %s", parse_err)
                 return None
 
         except Exception as exc:
