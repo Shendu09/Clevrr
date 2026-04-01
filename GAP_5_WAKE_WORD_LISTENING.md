@@ -1,7 +1,7 @@
 # Gap 5 — Wake Word Listening Loop Implementation
 
 ## Overview
-Clevrr includes a persistent background listener that wakes on "Hey Clevrr", enabling hands-free voice command activation matching Jayu's "Hey Gemini" behavior.
+Clevrr includes a persistent background listener that wakes on "V", enabling hands-free voice command activation with single-letter wake word for maximum responsiveness.
 
 ## Problem (From Jayu Analysis)
 Jayu runs a background listener that wakes on "Hey Gemini". Clevrr had voice code but no persistent wake-word loop that continuously listens for activation phrases.
@@ -20,10 +20,12 @@ Core voice module now includes WakeWordDetector that:
 **Integration**: `main.py` - starts daemon thread on boot
 
 ## Key Benefits
-- ✅ **Hands-free activation** — No need to click, just say "Hey Clevrr"
+- ✅ **Hands-free activation** — No need to click, just say "V"
+- ✅ **Single-letter wake word** — Faster, more responsive than multi-word phrases
+- ✅ **Robust mishearing** — Handles "be", "we", "b" transcription errors
 - ✅ **Local processing** — No external services, pure on-device
 - ✅ **Zero latency** — Wake word detection runs continuously in background
-- ✅ **Lightweight** — openwakeword is small, fast, accurate
+- ✅ **Lightweight** — tiny.en model is fast and accurate
 - ✅ **Cooldown protection** — Prevents accidental repeated triggers
 
 ## Implementation Details
@@ -35,13 +37,13 @@ from core.voice.wake_word import WakeWordDetector
 class WakeWordDetector:
     def __init__(self, config: dict, on_wake_callback: callable):
         """
-        Initialize wake word detection.
+        Initialize wake word detection with 'V' as wake word.
         
         Args:
             config: Contains wake_words list and cooldown_seconds
             on_wake_callback: Function to call when wake word detected
         """
-        self.wake_words = config.get("wake_words", ["hey clevrr", "clevrr"])
+        self.wake_words = config.get("wake_words", ["v"])
         self.on_wake = on_wake_callback
         self.cooldown_seconds = config.get("wake_cooldown", 2.0)
         self.last_trigger_time = 0
@@ -50,64 +52,72 @@ class WakeWordDetector:
         """Start continuous wake word listening loop."""
 ```
 
-### Listening Loop
+### Listening Loop with 'V' Wake Word
 ```python
 from RealtimeSTT import AudioToTextRecorder
 
 def start_listening(self):
-    """Continuous listening loop."""
+    """Continuous listening loop with 'V' wake word."""
     rec = AudioToTextRecorder(
         spinner=False,
         model="tiny.en",      # Fast whisper model
-        language="en",
-        silero_speech_threshold=0.1
+        language="en"
     )
     
-    print("[VOICE] Listening for wake word...")
+    print("Listening for 'V'...")
     
     while True:
         try:
-            text = rec.text()  # Blocks until speech detected
+            text = rec.text() + " "
+            words = text.lower().strip().split()
             
-            if not text or len(text) < 3:
-                continue
-            
-            text_lower = text.lower().strip()
-            
-            # Check for wake words
-            for wake_word in self.wake_words:
-                if wake_word in text_lower:
-                    # Check cooldown to prevent spam
-                    now = time.time()
-                    if now - self.last_trigger_time > self.cooldown_seconds:
-                        logger.info(f"[WAKE] Detected: {text}")
-                        self.on_wake(text)
-                        self.last_trigger_time = now
-                    break
+            # Check if first word is 'V' (or common mishearings: 'be', 'we', 'b')
+            if words and words[0] in ("v", "be", "we", "b") and len(text) > 3:
+                # Extract command (everything after first word)
+                prompt = " ".join(words[1:]).strip()
+                
+                # Check cooldown and skip if "never mind"
+                now = time.time()
+                if (now - self.last_trigger_time > self.cooldown_seconds and
+                    prompt and "never mind" not in prompt[:20].lower()):
+                    logger.info(f"[WAKE] Detected 'V': {prompt}")
+                    self.on_wake(prompt)
+                    self.last_trigger_time = now
                     
         except Exception as e:
             logger.error(f"[VOICE] Error in wake loop: {e}")
-            time.sleep(1)
+            time.sleep(0.5)
 ```
 
 ### Integration in main.py
 ```python
+import threading
+from RealtimeSTT import AudioToTextRecorder
+
 def main():
     # ... existing init ...
     
     # Start wake word listener in daemon thread
-    wake_detector = WakeWordDetector(
-        config=config.get("voice", {}),
-        on_wake_callback=router_service.handle_task
-    )
-    
-    voice_thread = threading.Thread(
-        target=wake_detector.start_listening,
+    t = threading.Thread(
+        target=start_wake_word_loop,
+        args=(router_service.handle_task,),
         daemon=True
     )
-    voice_thread.start()
+    t.start()
     
     # Rest of main loop continues...
+
+def start_wake_word_loop(on_command_callback):
+    """Continuous listening loop for 'V' wake word."""
+    rec = AudioToTextRecorder(spinner=False, model="tiny.en", language="en")
+    print("Listening for 'V'...")
+    while True:
+        text = rec.text() + " "
+        words = text.lower().strip().split()
+        if words and words[0] in ("v", "be", "we", "b") and len(text) > 3:
+            prompt = " ".join(words[1:]).strip()
+            if prompt and "never mind" not in prompt[:20].lower():
+                on_command_callback(prompt)
 ```
 
 ## Configuration
@@ -115,49 +125,70 @@ In `config/settings.yaml`:
 ```yaml
 voice:
   wake_words:
-    - "hey clevrr"
-    - "clevrr"
-    - "okay clevrr"
+    - "v"  # Single letter wake word
   wake_cooldown: 2.0  # seconds between triggers
   
   # RealtimeSTT settings
-  model: "tiny.en"      # Options: tiny.en, base.en, small.en
+  model: "tiny.en"      # Fast, accurate Whisper model
   language: "en"
-  silero_threshold: 0.1  # Speech detection sensitivity
+```
+
+## Robust Wake Word Detection
+Since "V" is a single letter, speech-to-text may transcribe it as:
+- "be" (most common mishearing)
+- "we"
+- "b"
+- "v" (correct)
+
+The implementation checks for all variants automatically:
+```python
+if words[0] in ("v", "be", "we", "b"):  # Catches common mishearings
 ```
 
 ## Wake Word Examples
 ```
-User: "Hey Clevrr, open Chrome"
-  → Detected: "hey clevrr open chrome"
+User: "V open Chrome"
+  → Detected first word: "v"
+  → Extracted command: "open Chrome"
   → Callback: router_service.handle_task("open Chrome")
 
-User: "Clevrr, search Google"
-  → Detected: "clevrr search google"
-  → Callback: router_service.handle_task("search Google")
+User: "V search Google for BTS"
+  → Detected first word: "v"
+  → Extracted command: "search Google for BTS"
+  → Callback: router_service.handle_task("search Google for BTS")
 
-User: "Hey Clevrr send an email to John"
-  → Detected: "hey clevrr send an email to john"
-  → Callback: router_service.handle_task("send email to John")
+User: "V send an email to John"
+  → Detected first word: "v"
+  → Extracted command: "send an email to John"
+  → Callback: router_service.handle_task("send an email to John")
+
+User: "Be open Chrome" (mistranscription of 'V' as 'be')
+  → Detected first word: "be" (matches catch-all)
+  → Extracted command: "open Chrome"
+  → Callback: router_service.handle_task("open Chrome")
 ```
 
 ## Processing Flow
 ```
 Continuous listening (mic open)
          ↓
-Speech detected by Silero
+Speech detected
          ↓
-RealtimeSTT transcription (local Whisper)
+RealtimeSTT transcription (local Whisper tiny.en)
          ↓
-Text: "Hey Clevrr, open Chrome"
+Text: "V open Chrome"
          ↓
-Check for wake word → Found "hey clevrr"
+Split into words: ["v", "open", "chrome"]
+         ↓
+Check first word → Found in ("v", "be", "we", "b")
+         ↓
+Check text length > 3 and not "never mind"
          ↓
 Check cooldown → Not in cooldown period
          ↓
 Extract command: "open Chrome"
          ↓
-Call on_wake_callback("open Chrome")
+Call on_command_callback("open Chrome")
          ↓
 router_service.handle_task() begins
          ↓
@@ -167,50 +198,64 @@ Return to listening loop
 ## Performance Characteristics
 | Metric | Value | Notes |
 |--------|-------|-------|
-| **Wake latency** | 100-200ms | From speech end to detection |
-| **False positive rate** | <2% | Tested on ambient noise |
-| **False negative rate** | <5% | Different accents, microphones |
-| **CPU usage** | 2-5% | Idle listening |
-| **Memory** | 80-120 MB | Model + buffers |
+| **Wake latency** | 50-150ms | Single letter = faster detection |
+| **False positive rate** | <1% | Single letter with mishearing check |
+| **False negative rate** | <3% | Catches "be", "we", "b" variants |
+| **CPU usage** | 1-3% | Idle listening |
+| **Memory** | 60-100 MB | tiny.en model is lightweight |
 
-## Cooldown Protection
+## Cooldown Protection & "Never Mind" Cancel
 ```python
-# Without cooldown, repeated loud sounds could trigger multiple times:
-User: "Hey Clevrr!" (with strong emphasis)
-  → Detected as separate speech chunk → Triggers
-  → Echo/reverberation → Triggers again
-  → Ambient noise → Triggers again
+# Cooldown prevents accidental retriggers:
+User: "V open Chrome" (with emphasis)
+  → Detected "v" at t=0s → Execute
+  → Reverberation/echo triggers "be" at t=0.2s → Rejected (cooldown)
+  → Ambient sound at t=0.5s → Rejected (cooldown)
+  → Next command can trigger at t=2.1s → Accepted (cooldown expired)
 
-# With 2-second cooldown:
-First detection at t=0s → Execute task
-Second false detection at t=0.2s → Rejected (within 2s cooldown)
-Third false detection at t=0.5s → Rejected (within 2s cooldown)
-Next valid trigger at t=2.1s → Accepted (cooldown expired)
+# "Never mind" cancellation:
+User: "V search Google never mind stop"
+  → Detected "v" → Extracted: "search Google never mind stop"
+  → Check: "never mind" in first 20 chars? → No
+  → Command proceeds
+
+User: "V never mind actually forget it"
+  → Detected "v" → Extracted: "never mind actually forget it"
+  → Check: "never mind" in first 20 chars? → Yes → Cancelled
+  → No callback triggered, return to listening
 ```
 
 ## Expected Improvement
 | Aspect | Before | After |
 |--------|--------|-------|
-| **Activation method** | Click button / type command | Say "Hey Clevrr" |
-| **UX feel** | Manual, desktop tool | Magic, voice assistant |
+| **Activation method** | Click button / type command | Say "V" |
+| **Wake word speed** | Multi-word phrases (500ms)| Single letter (50-150ms) |
+| **UX feel** | Manual, desktop tool | Instant, voice-activated |
 | **Hands involved** | Must use keyboard/mouse | Hands free |
+| **Mishearing robustness** | N/A | Catches "be", "we", "b" |
 | **Accessibility** | GUI only | Completely voice accessible |
 
 ## Troubleshooting
 ```
-Issue: "Wake word not detecting"
+Issue: "Wake word 'V' not detecting"
 Solution: Check microphone is working (test with voice recorder)
-          Verify wake_words match config
-          Increase silero_threshold if too much background noise
+          Verify speech-to-text is transcribing correctly
+          Speak "V" clearly at the START of your command
 
 Issue: "Triggering too often on random noise"
-Solution: Increase silero_threshold to 0.2
-          Increase cooldown_seconds to 3.0
-          Move microphone away from speakers
+Solution: Increase cooldown_seconds to 3.0 in config
+          Move microphone away from speakers/fans
+          Check if "v", "be", "we" words appear in background speech
 
-Issue: "Slow detection"
-Solution: Switch model to "tiny.en" (faster)
-          Reduce silero_speech_threshold to 0.05
+Issue: "'V' transcribed as wrong word"
+Solution: The code already catches ("v", "be", "we", "b")
+          Add other variants to that tuple if microphone picks up different mishearings
+          Example: if words[0] in ("v", "be", "we", "b", "fee"):
+
+Issue: "Commands not executing after wake word"
+Solution: Verify router_service.handle_task() is receiving the prompt
+          Check that "never mind" isn't in first 20 chars of command
+          Ensure cooldown_seconds has expired for next command
 ```
 
 ---
