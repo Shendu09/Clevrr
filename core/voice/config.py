@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 @dataclass(slots=True)
 class VoiceConfig:
-    wake_words: list[str] = field(default_factory=lambda: ["hey clevrr", "clevrr"])
+    wake_words: list[str] = field(default_factory=lambda: ["v"])
     sample_rate: int = 16000
     channels: int = 1
     chunk_duration_ms: int = 30

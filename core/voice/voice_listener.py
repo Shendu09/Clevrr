@@ -97,10 +97,9 @@ class VoiceListener:
                 logger.debug("Transcribed: %s", text)
 
                 # Check for wake word
-                if "hey clevrr" in text_lower:
-                    # Extract command (everything after wake word)
-                    wake_word_pos = text_lower.find("hey clevrr")
-                    command = text[wake_word_pos + len("hey clevrr") :].strip()
+                words = text_lower.strip().split()
+                if words and words[0] in ("v", "be", "we", "b"):
+                    command = " ".join(text.strip().split()[1:]).strip()
 
                     # Filter out false positives (partial matches)
                     if len(command) < 4:

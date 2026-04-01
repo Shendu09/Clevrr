@@ -368,3 +368,7 @@ def run_event_loop(orchestrator=None, session=None, config: Dict = None):
     finally:
         loop.close()
         logger.info("[EVENT LOOP] Event loop closed")
+
+
+# Backwards compatibility alias
+EventLoop = SystemEventLoop
